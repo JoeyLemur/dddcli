@@ -110,8 +110,33 @@ AutoCaptureModeCli parseAutoCaptureMode(const std::string& value)
 
 uint16_t parseU16(const std::string& value)
 {
-    int base = lower(value).starts_with("0x") ? 16 : 10;
-    return (uint16_t)std::stoul(value, nullptr, base);
+    auto text = trim(value);
+    int base = 10;
+    std::string digits = text;
+    if (lower(text).starts_with("0x"))
+    {
+        base = 16;
+        digits = text.substr(2);
+    }
+    if (digits.empty())
+    {
+        throw std::runtime_error("invalid USB ID: " + value);
+    }
+    auto validDigit = [base](unsigned char ch)
+    {
+        return base == 16 ? std::isxdigit(ch) : std::isdigit(ch);
+    };
+    if (!std::all_of(digits.begin(), digits.end(), validDigit))
+    {
+        throw std::runtime_error("invalid USB ID: " + value);
+    }
+
+    unsigned long parsed = std::stoul(digits, nullptr, base);
+    if (parsed > 0xFFFF)
+    {
+        throw std::runtime_error("USB ID out of range: " + value);
+    }
+    return (uint16_t)parsed;
 }
 
 void applyAddressFields(CliOptions& options)
@@ -175,13 +200,20 @@ std::filesystem::path defaultConfigPath()
     return "dddcli.toml";
 }
 
-bool TomlConfig::load(const std::filesystem::path& path, std::string& error)
+bool TomlConfig::load(const std::filesystem::path& path, std::string& error, bool allowMissing)
 {
     values.clear();
     std::ifstream stream(path);
     if (!stream.is_open())
     {
-        return true;
+        std::error_code existsError;
+        bool exists = std::filesystem::exists(path, existsError);
+        if (allowMissing && !exists && !existsError)
+        {
+            return true;
+        }
+        error = "failed to open " + path.string();
+        return false;
     }
 
     std::string section;
@@ -271,7 +303,11 @@ ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& bas
     {
         std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") parsed.command = "help";
-        else if (arg == "--config") parsed.options.configPath = requireValue(i, argc, argv, arg);
+        else if (arg == "--config")
+        {
+            parsed.options.configPath = requireValue(i, argc, argv, arg);
+            parsed.options.configPathExplicit = true;
+        }
         else if (arg == "--debug") parsed.options.debug = true;
         else if (arg == "--quiet") parsed.options.quiet = true;
         else if (arg == "--vid") parsed.options.usbVid = parseU16(requireValue(i, argc, argv, arg));
@@ -484,6 +520,11 @@ void printUsage()
         "  --duration <seconds>             stop manual capture after duration\n"
         "  --usb-device <path>              preferred USB device path\n"
         "  --vid <id> --pid <id>            USB IDs, decimal or 0x-prefixed\n"
+        "  --disk-buffer-queue-size <size>  disk buffer queue size, bytes/mb/mib\n"
+        "  --small-usb-transfer-queue       use reduced USB transfer queue\n"
+        "  --large-usb-transfer-queue       use configured USB transfer queue\n"
+        "  --small-usb-transfers            use small USB transfers\n"
+        "  --large-usb-transfers            use large USB transfers\n"
         "\n"
         "Player/automatic options:\n"
         "  --serial-device <path>           serial device, e.g. /dev/ttyUSB0\n"

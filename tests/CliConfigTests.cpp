@@ -1,15 +1,75 @@
 #include "CliConfig.h"
 #include "PlayerSerial.h"
+#include "ProgressLine.h"
 #include <cassert>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
+#include <stdexcept>
+
+namespace
+{
+void assertParseThrows(const char* const* argv, int argc)
+{
+    bool threw = false;
+    try
+    {
+        parseCommandLine(argc, const_cast<char**>(argv));
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    assert(threw);
+}
+}
 
 int main()
 {
     assert(captureFormatExtension(CaptureFormatCli::Lds) == ".lds");
     assert(captureFormatExtension(CaptureFormatCli::Raw) == ".raw");
     assert(captureFormatExtension(CaptureFormatCli::Cds) == ".cds");
+
+    CaptureProgressSnapshot progressSnapshot;
+    progressSnapshot.elapsedSeconds = 42;
+    progressSnapshot.bytesWritten = 5 * 1024 * 1024;
+    progressSnapshot.transfers = 123;
+    progressSnapshot.samples = 456;
+    assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123 samples=456");
+
+    std::ostringstream liveOutput;
+    ProgressLine liveProgress(liveOutput, false, true);
+    liveProgress.update({ 100, 12 * 1024 * 1024, 99999, 88888 });
+    liveProgress.update({ 1, 0, 1, 2 });
+    std::string liveText = liveOutput.str();
+    assert(liveText.starts_with("\relapsed=100s written=12MiB transfers=99999 samples=88888"));
+    assert(liveText.find("\relapsed=1s written=0MiB transfers=1 samples=2 ") != std::string::npos);
+    liveProgress.clear();
+    std::string clearedText = liveOutput.str();
+    assert(clearedText.ends_with("\r"));
+    liveProgress.finish();
+    assert(liveOutput.str() == clearedText);
+
+    std::ostringstream finishOutput;
+    ProgressLine finishingProgress(finishOutput, false, true);
+    finishingProgress.update({ 1, 0, 1, 2 });
+    finishingProgress.finish();
+    assert(finishOutput.str().ends_with("\n"));
+
+    std::ostringstream quietOutput;
+    ProgressLine quietProgress(quietOutput, true, true);
+    quietProgress.update(progressSnapshot);
+    quietProgress.clear();
+    quietProgress.finish();
+    assert(quietOutput.str().empty());
+
+    std::ostringstream nonLiveOutput;
+    ProgressLine nonLiveProgress(nonLiveOutput, false, false);
+    nonLiveProgress.update(progressSnapshot);
+    nonLiveProgress.clear();
+    nonLiveProgress.finish();
+    assert(nonLiveOutput.str().empty());
 
     CliOptions base;
     base.configPath = "custom.toml";
@@ -34,6 +94,50 @@ int main()
     assert(parsed.options.jsonOutput == "/tmp/capture.json");
     assert(parsed.options.durationSeconds.has_value());
     assert(parsed.options.durationSeconds.value() == 1);
+
+    const char* configArgv[] = {
+        "dddcli",
+        "capture",
+        "--config",
+        "/tmp/missing-explicit-dddcli.toml",
+    };
+    auto configParsed = parseCommandLine(4, const_cast<char**>(configArgv));
+    assert(configParsed.options.configPath == "/tmp/missing-explicit-dddcli.toml");
+    assert(configParsed.options.configPathExplicit);
+
+    const char* usbIdArgv[] = {
+        "dddcli",
+        "capture",
+        "--vid",
+        "7504",
+        "--pid",
+        "0x603B",
+    };
+    auto usbIdParsed = parseCommandLine(6, const_cast<char**>(usbIdArgv));
+    assert(usbIdParsed.options.usbVid == 7504);
+    assert(usbIdParsed.options.usbPid == 0x603B);
+
+    const char* upperHexUsbIdArgv[] = {
+        "dddcli",
+        "capture",
+        "--pid",
+        "0X603B",
+    };
+    auto upperHexUsbIdParsed = parseCommandLine(4, const_cast<char**>(upperHexUsbIdArgv));
+    assert(upperHexUsbIdParsed.options.usbPid == 0x603B);
+
+    const char* outOfRangeVidArgv[] = { "dddcli", "capture", "--vid", "70000" };
+    assertParseThrows(outOfRangeVidArgv, 4);
+    const char* outOfRangePidArgv[] = { "dddcli", "capture", "--pid", "0x10000" };
+    assertParseThrows(outOfRangePidArgv, 4);
+    const char* negativeVidArgv[] = { "dddcli", "capture", "--vid", "-1" };
+    assertParseThrows(negativeVidArgv, 4);
+    const char* partialVidArgv[] = { "dddcli", "capture", "--vid", "123abc" };
+    assertParseThrows(partialVidArgv, 4);
+    const char* malformedHexPidArgv[] = { "dddcli", "capture", "--pid", "0x" };
+    assertParseThrows(malformedHexPidArgv, 4);
+    const char* invalidPidArgv[] = { "dddcli", "capture", "--pid", "xyz" };
+    assertParseThrows(invalidPidArgv, 4);
 
     const char* profileArgv[] = {
         "dddcli",
@@ -100,6 +204,33 @@ int main()
     assert(options.startAddress == 754);
     assert(options.endAddress == 754);
 
+    auto missingPath = std::filesystem::temp_directory_path() / "dddcli-missing-test.toml";
+    std::filesystem::remove(missingPath);
+    error.clear();
+    assert(config.load(missingPath, error));
+    error.clear();
+    assert(!config.load(missingPath, error, false));
+    assert(!error.empty());
+
+    auto invalidUsbIdPath = std::filesystem::temp_directory_path() / "dddcli-invalid-usb-id-test.toml";
+    {
+        std::ofstream file(invalidUsbIdPath);
+        file << "[usb]\n";
+        file << "vid = \"0x10000\"\n";
+    }
+    assert(config.load(invalidUsbIdPath, error));
+    bool invalidConfigThrew = false;
+    try
+    {
+        CliOptions invalidUsbOptions;
+        config.applyTo(invalidUsbOptions);
+    }
+    catch (const std::runtime_error&)
+    {
+        invalidConfigThrew = true;
+    }
+    assert(invalidConfigThrew);
+
     assert(parseClvAddressSeconds("754") == 754);
     assert(parseClvAddressSeconds("01234") == 754);
     assert(parseClvAddressSeconds("0123400") == 754);
@@ -118,6 +249,20 @@ int main()
     auto frame = parsePlayerFrameResponse("<12345\r");
     assert(frame.address == 12345);
     assert(frame.inLeadIn);
+    assert(parsePlayerFrameResponse("E04\r").address == -1);
+    assert(parsePlayerFrameResponse("abc\r").address == -1);
+    assert(parsePlayerFrameResponse("12x45\r").address == -1);
+    assert(parsePlayerFrameResponse("<E04\r").address == -1);
+    auto emptyLeadOutFrame = parsePlayerFrameResponse(">\r");
+    assert(emptyLeadOutFrame.address == -1);
+    assert(emptyLeadOutFrame.inLeadOut);
+    assert(parsePlayerTimeCodeResponse("E04\r").address == -1);
+    assert(parsePlayerTimeCodeResponse("abc\r").address == -1);
+    assert(parsePlayerTimeCodeResponse("0126A\r").address == -1);
+    assert(parsePlayerTimeCodeResponse("<bad\r").address == -1);
+    auto emptyLeadOutTimeCode = parsePlayerTimeCodeResponse(">\r");
+    assert(emptyLeadOutTimeCode.address == -1);
+    assert(emptyLeadOutTimeCode.inLeadOut);
     assert(escapedSerialResponse("A\r\n\t\\\x01") == "A\\r\\n\\t\\\\\\x01");
 
     auto now = std::chrono::steady_clock::now();
@@ -148,5 +293,6 @@ int main()
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Cav, activePostRoll, PlayerStateCli::Stop));
 
     std::filesystem::remove(path);
+    std::filesystem::remove(invalidUsbIdPath);
     return 0;
 }

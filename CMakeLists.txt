@@ -20,6 +20,7 @@ add_executable(dddcli
     src/ConsoleLogger.cpp
     src/CaptureMetadata.cpp
     src/PlayerSerial.cpp
+    src/ProgressLine.cpp
     "${GUI_CAPTURE_DIR}/UsbDeviceBase.cpp"
     "${GUI_CAPTURE_DIR}/UsbDeviceLibUsb.cpp"
 )
@@ -42,6 +43,7 @@ if(BUILD_TESTING)
         tests/CliConfigTests.cpp
         src/CliConfig.cpp
         src/PlayerSerial.cpp
+        src/ProgressLine.cpp
     )
     target_include_directories(dddcli_tests PRIVATE
         src

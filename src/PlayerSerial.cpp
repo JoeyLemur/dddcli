@@ -137,6 +137,13 @@ bool containsError(const std::string& response)
 {
     return response.find('E') != std::string::npos;
 }
+
+bool allDigits(const std::string& value)
+{
+    return !value.empty() && std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+        return std::isdigit(ch);
+    });
+}
 }
 
 PlayerSerial::PlayerSerial() = default;
@@ -478,7 +485,17 @@ AddressResult parsePlayerFrameResponse(std::string response)
     }
     if (!response.empty())
     {
-        result.address = std::stoi(response.substr(0, std::min<size_t>(5, response.size())));
+        if (response.size() <= 5 && allDigits(response))
+        {
+            try
+            {
+                result.address = std::stoi(response);
+            }
+            catch (const std::exception&)
+            {
+                result.address = -1;
+            }
+        }
     }
     return result;
 }
@@ -499,7 +516,17 @@ AddressResult parsePlayerTimeCodeResponse(std::string response)
     }
     if (!response.empty())
     {
-        result.address = parseClvAddressSeconds(response);
+        if (allDigits(response))
+        {
+            try
+            {
+                result.address = parseClvAddressSeconds(response);
+            }
+            catch (const std::exception&)
+            {
+                result.address = -1;
+            }
+        }
     }
     return result;
 }

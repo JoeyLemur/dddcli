@@ -59,6 +59,7 @@ enum class PlayerStateCli
 struct CliOptions
 {
     std::filesystem::path configPath;
+    bool configPathExplicit = false;
     bool debug = false;
     bool quiet = false;
 
@@ -106,7 +107,7 @@ struct AutoCaptureStopState
 class TomlConfig
 {
 public:
-    bool load(const std::filesystem::path& path, std::string& error);
+    bool load(const std::filesystem::path& path, std::string& error, bool allowMissing = true);
     void applyTo(CliOptions& options) const;
 
 private:

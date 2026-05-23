@@ -2,6 +2,7 @@
 #include "ConsoleLogger.h"
 #include "CaptureMetadata.h"
 #include "PlayerSerial.h"
+#include "ProgressLine.h"
 #include "UsbDeviceLibUsb.h"
 #include <atomic>
 #include <chrono>
@@ -31,20 +32,14 @@ bool initializeUsb(UsbDeviceLibUsb& usb, const CliOptions& options)
     return usb.Initialize(options.usbVid, options.usbPid);
 }
 
-void printCaptureProgress(UsbDeviceBase& usb, const std::chrono::steady_clock::time_point& start, bool quiet)
+CaptureProgressSnapshot makeCaptureProgressSnapshot(UsbDeviceBase& usb, const std::chrono::steady_clock::time_point& start)
 {
-    if (quiet)
-    {
-        return;
-    }
-    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start).count();
-    auto mbWritten = usb.GetFileSizeWrittenInBytes() / (1024 * 1024);
-    std::cerr << "\r"
-              << "elapsed=" << elapsed << "s "
-              << "written=" << mbWritten << "MiB "
-              << "transfers=" << usb.GetNumberOfTransfers()
-              << " samples=" << usb.GetProcessedSampleCount()
-              << std::flush;
+    return {
+        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start).count(),
+        static_cast<uint64_t>(usb.GetFileSizeWrittenInBytes()),
+        static_cast<uint64_t>(usb.GetNumberOfTransfers()),
+        static_cast<uint64_t>(usb.GetProcessedSampleCount())
+    };
 }
 
 bool startCapture(UsbDeviceBase& usb, const CliOptions& options, const std::filesystem::path& outputPath)
@@ -61,6 +56,49 @@ bool startCapture(UsbDeviceBase& usb, const CliOptions& options, const std::file
         usbQueueSize(options),
         options.diskBufferQueueSize);
 }
+
+class AutoCaptureCleanupGuard
+{
+public:
+    AutoCaptureCleanupGuard(UsbDeviceBase& usbDevice, PlayerSerial& serialPlayer, bool& started, bool& locked)
+        : usb(usbDevice), player(serialPlayer), captureStarted(started), keyLocked(locked)
+    {
+    }
+
+    ~AutoCaptureCleanupGuard()
+    {
+        cleanup();
+    }
+
+    void disarm()
+    {
+        active = false;
+    }
+
+private:
+    void cleanup()
+    {
+        if (!active)
+        {
+            return;
+        }
+        if (captureStarted && usb.GetTransferInProgress())
+        {
+            usb.StopCapture();
+        }
+        if (keyLocked)
+        {
+            player.setKeyLock(false);
+            keyLocked = false;
+        }
+    }
+
+    UsbDeviceBase& usb;
+    PlayerSerial& player;
+    bool& captureStarted;
+    bool& keyLocked;
+    bool active = true;
+};
 
 int runListDevices(UsbDeviceLibUsb& usb, const CliOptions& options)
 {
@@ -100,15 +138,11 @@ void writeMetadataIfRequested(const CliOptions& options, const CaptureMetadata& 
     }
 }
 
-int finishCapture(UsbDeviceBase& usb, bool quiet)
+int finishCapture(UsbDeviceBase& usb)
 {
     if (usb.GetTransferInProgress())
     {
         usb.StopCapture();
-    }
-    if (!quiet)
-    {
-        std::cerr << "\n";
     }
     auto result = usb.GetTransferResult();
     if (result != UsbDeviceBase::TransferResult::Success && result != UsbDeviceBase::TransferResult::ForcedAbort)
@@ -129,7 +163,10 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     }
 
     auto outputPath = buildOutputPath(options);
-    std::cerr << "Capturing to " << outputPath << "\n";
+    if (!options.quiet)
+    {
+        std::cerr << "Capturing to " << outputPath << "\n";
+    }
     if (!startCapture(usb, options, outputPath))
     {
         std::cerr << "Failed to start capture: " << transferResultToString(usb.GetTransferResult()) << "\n";
@@ -143,9 +180,10 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     metadata.creationTimeUtc = std::chrono::system_clock::now();
 
     auto start = std::chrono::steady_clock::now();
+    ProgressLine progress(options.quiet);
     while (!stopRequested && usb.GetTransferInProgress())
     {
-        printCaptureProgress(usb, start, options.quiet);
+        progress.update(makeCaptureProgressSnapshot(usb, start));
         if (options.durationSeconds.has_value() &&
             std::chrono::steady_clock::now() - start >= std::chrono::seconds(options.durationSeconds.value()))
         {
@@ -153,7 +191,8 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-    int result = finishCapture(usb, options.quiet);
+    progress.finish();
+    int result = finishCapture(usb);
     metadata.duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
     writeMetadataIfRequested(options, metadata, usb);
     return result;
@@ -167,9 +206,12 @@ bool connectPlayer(PlayerSerial& player, const CliOptions& options)
         std::cerr << "Failed to connect to player: " << error << "\n";
         return false;
     }
-    std::cerr << "Connected to " << player.modelName() << " version " << player.versionNumber()
-              << " @ " << serialSpeedToString(player.detectedSpeed()) << " bps"
-              << " using " << playerProfileToString(player.activeProfile()) << " profile\n";
+    if (!options.quiet)
+    {
+        std::cerr << "Connected to " << player.modelName() << " version " << player.versionNumber()
+                  << " @ " << serialSpeedToString(player.detectedSpeed()) << " bps"
+                  << " using " << playerProfileToString(player.activeProfile()) << " profile\n";
+    }
     return true;
 }
 
@@ -275,17 +317,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     metadata.playerModelName = player.modelName();
     metadata.playerVersionNumber = player.versionNumber();
     metadata.serialSpeed = serialSpeedToString(player.detectedSpeed());
-    auto cleanup = [&]()
-    {
-        if (captureStarted && usb.GetTransferInProgress())
-        {
-            usb.StopCapture();
-        }
-        if (keyLocked)
-        {
-            player.setKeyLock(false);
-        }
-    };
+    AutoCaptureCleanupGuard cleanupGuard(usb, player, captureStarted, keyLocked);
 
     if (options.keyLock)
     {
@@ -296,13 +328,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     if (state == PlayerStateCli::Unknown)
     {
         std::cerr << "The player's state could not be determined\n";
-        cleanup();
         return 1;
     }
     if (state == PlayerStateCli::Stop && !player.setPlayerState(PlayerStateCli::Play))
     {
         std::cerr << "Could not spin up player\n";
-        cleanup();
         return 1;
     }
     auto detectedDiscType = player.getDiscType();
@@ -311,7 +341,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     if (detectedDiscType != options.discType)
     {
         std::cerr << "The disc in the player does not match --disc-type\n";
-        cleanup();
         return 1;
     }
 
@@ -321,7 +350,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         if (!player.setPositionFrame(60000))
         {
             std::cerr << "Could not determine CAV disc length\n";
-            cleanup();
             return 1;
         }
         int discEnd = player.getCurrentFrame().address;
@@ -334,7 +362,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         if (!player.setPositionTimeCode(latestClvAddressToProbeSeconds))
         {
             std::cerr << "Could not determine CLV disc length\n";
-            cleanup();
             return 1;
         }
         int discEnd = player.getCurrentTimeCode().address;
@@ -348,7 +375,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         if (!player.setPlayerState(PlayerStateCli::Stop))
         {
             std::cerr << "Could not spin-down disc\n";
-            cleanup();
             return 1;
         }
     }
@@ -357,7 +383,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         if (!player.setPositionFrame(options.startAddress))
         {
             std::cerr << "Could not position player on start frame\n";
-            cleanup();
             return 1;
         }
     }
@@ -366,16 +391,17 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         if (!player.setPositionTimeCode(options.startAddress))
         {
             std::cerr << "Could not position player on start time code\n";
-            cleanup();
             return 1;
         }
     }
 
-    std::cerr << "Capturing to " << outputPath << "\n";
+    if (!options.quiet)
+    {
+        std::cerr << "Capturing to " << outputPath << "\n";
+    }
     if (!startCapture(usb, options, outputPath))
     {
         std::cerr << "Failed to start capture: " << transferResultToString(usb.GetTransferResult()) << "\n";
-        cleanup();
         return 1;
     }
     captureStarted = true;
@@ -386,7 +412,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     if (!player.setPlayerState(playState))
     {
         std::cerr << "Could not start player playback\n";
-        cleanup();
         return 1;
     }
 
@@ -397,6 +422,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     std::string autoCaptureErrorMessage;
     AutoCaptureStopState stopState;
     auto start = std::chrono::steady_clock::now();
+    ProgressLine progress(options.quiet);
     while (!stopRequested && usb.GetTransferInProgress())
     {
         auto now = std::chrono::steady_clock::now();
@@ -421,6 +447,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 {
                     if (!options.quiet)
                     {
+                        progress.clear();
                         std::cerr << "CLV post-roll ended because player state is "
                                   << playerStateToString(playerState) << "\n";
                     }
@@ -433,6 +460,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 autoCaptureErrorMessage = options.discType == DiscTypeCli::Cav
                     ? "CAV disc frames were not sequential - player skipped back more than 1000 frames during capture"
                     : "CLV disc frames were not sequential - player skipped back more than 1000 frames during capture";
+                progress.clear();
                 std::cerr << autoCaptureErrorMessage << "\n";
                 break;
             }
@@ -441,6 +469,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         else
         {
             ++consecutiveAddressReadFailures;
+            progress.clear();
             std::cerr << "Could not read current player address ("
                       << consecutiveAddressReadFailures << "/"
                       << maxConsecutiveAddressReadFailures << ")\n";
@@ -450,16 +479,18 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 autoCaptureErrorMessage = options.discType == DiscTypeCli::Cav
                     ? "Could not read current CAV frame number from player during capture"
                     : "Could not read current CLV time code from player during capture";
+                progress.clear();
                 std::cerr << autoCaptureErrorMessage << "\n";
                 break;
             }
         }
 
-        printCaptureProgress(usb, start, options.quiet);
+        progress.update(makeCaptureProgressSnapshot(usb, start));
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    int captureResult = finishCapture(usb, options.quiet);
+    progress.finish();
+    int captureResult = finishCapture(usb);
     metadata.duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
     captureStarted = false;
     if (autoCaptureError)
@@ -468,7 +499,12 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     }
     else if (options.discType == DiscTypeCli::Cav) player.setPlayerState(PlayerStateCli::Stop);
     else player.setPlayerState(PlayerStateCli::Pause);
-    if (keyLocked) player.setKeyLock(false);
+    if (keyLocked)
+    {
+        player.setKeyLock(false);
+        keyLocked = false;
+    }
+    cleanupGuard.disarm();
     writeMetadataIfRequested(options, metadata, usb);
     if (autoCaptureError)
     {
@@ -496,7 +532,8 @@ int main(int argc, char* argv[])
         std::string configError;
         CliOptions configured;
         configured.configPath = preliminary.options.configPath;
-        if (!config.load(preliminary.options.configPath, configError))
+        configured.configPathExplicit = preliminary.options.configPathExplicit;
+        if (!config.load(preliminary.options.configPath, configError, !preliminary.options.configPathExplicit))
         {
             std::cerr << "Failed to read config: " << configError << "\n";
             return 1;
