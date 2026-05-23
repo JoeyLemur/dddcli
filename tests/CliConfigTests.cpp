@@ -62,6 +62,20 @@ void assertConfigApplyThrows(const std::filesystem::path& path, const std::strin
     assert(threw);
     std::filesystem::remove(path);
 }
+
+void assertClvAddressThrows(const std::string& value)
+{
+    bool threw = false;
+    try
+    {
+        parseClvAddressSeconds(value);
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    assert(threw);
+}
 }
 
 int main()
@@ -297,6 +311,34 @@ int main()
     };
     assertParseThrows(equalClvPartialArgv, 10, validationBase);
 
+    const char* invalidSixDigitClvPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "clv",
+        "--mode",
+        "partial",
+        "--start-address",
+        "123456",
+        "--end-address",
+        "123457",
+    };
+    assertParseThrows(invalidSixDigitClvPartialArgv, 10, validationBase);
+
+    const char* invalidEightDigitClvPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "clv",
+        "--mode",
+        "partial",
+        "--start-address",
+        "01234",
+        "--end-address",
+        "01234000",
+    };
+    assertParseThrows(invalidEightDigitClvPartialArgv, 10, validationBase);
+
     CliOptions invalidConfiguredPartial;
     invalidConfiguredPartial.discType = DiscTypeCli::Cav;
     invalidConfiguredPartial.autoCaptureMode = AutoCaptureModeCli::Partial;
@@ -393,9 +435,14 @@ int main()
     auto invalidSizePath = std::filesystem::temp_directory_path() / "dddcli-invalid-size-test.toml";
     assertConfigApplyThrows(invalidSizePath, "[usb]\ndisk_buffer_queue_size = \"128MiBtypo\"\n");
 
+    auto invalidClvAddressPath = std::filesystem::temp_directory_path() / "dddcli-invalid-clv-address-test.toml";
+    assertConfigApplyThrows(invalidClvAddressPath, "[auto_capture]\ndisc_type = \"clv\"\nstart_address = \"123456\"\n");
+
     assert(parseClvAddressSeconds("754") == 754);
     assert(parseClvAddressSeconds("01234") == 754);
     assert(parseClvAddressSeconds("0123400") == 754);
+    assertClvAddressThrows("123456");
+    assertClvAddressThrows("01234000");
     assert(playerProfileForModelCode("15", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV4300D);
     assert(playerProfileForModelCode("07", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV2200);
     assert(playerProfileForModelCode("42", PlayerProfileCli::Auto) == PlayerProfileCli::GenericLevel3);

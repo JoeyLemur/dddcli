@@ -437,7 +437,7 @@ int parseClvAddressSeconds(const std::string& value)
         return (hours * 60 * 60) + (minutes * 60) + seconds;
     }
 
-    return raw;
+    throw std::runtime_error("invalid CLV address length: " + value);
 }
 
 bool shouldStopAutoCaptureAtAddress(

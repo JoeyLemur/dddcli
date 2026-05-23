@@ -228,10 +228,31 @@ int runPlayerTransportAction(PlayerSerial& player, const std::string& action, Pl
     return 0;
 }
 
+bool isKnownPlayerAction(const std::string& action)
+{
+    return action == "status" ||
+        action == "play" ||
+        action == "pause" ||
+        action == "stop" ||
+        action == "still" ||
+        action == "read-user-codes" ||
+        action == "raw-command";
+}
+
 int runPlayer(const ParsedCommandLine& parsed)
 {
     const auto& action = parsed.playerAction.empty() ? std::string("status") : parsed.playerAction;
-    if (action == "raw-command" && !parsed.playerRawCommand.empty() && !playerRawCommandFits(parsed.playerRawCommand))
+    if (!isKnownPlayerAction(action))
+    {
+        std::cerr << "Unknown player action: " << action << "\n";
+        return 1;
+    }
+    if (action == "raw-command" && parsed.playerRawCommand.empty())
+    {
+        std::cerr << "raw-command requires a command string\n";
+        return 1;
+    }
+    if (action == "raw-command" && !playerRawCommandFits(parsed.playerRawCommand))
     {
         std::cerr << "raw-command exceeds " << MaxPlayerSerialCommandBytes << " bytes including carriage return\n";
         return 1;
@@ -262,17 +283,7 @@ int runPlayer(const ParsedCommandLine& parsed)
     }
     else if (action == "raw-command")
     {
-        if (parsed.playerRawCommand.empty())
-        {
-            std::cerr << "raw-command requires a command string\n";
-            return 1;
-        }
         std::cout << escapedSerialResponse(player.rawCommand(parsed.playerRawCommand)) << "\n";
-    }
-    else
-    {
-        std::cerr << "Unknown player action: " << action << "\n";
-        return 1;
     }
     return 0;
 }
