@@ -14,7 +14,7 @@ Guidance for agents working in this repository.
 - `src/ProgressLine.*`: compact stderr progress display for capture loops.
 - `tests/CliConfigTests.cpp`: assertion-based tests for config, parsing, output format helpers, player parsing helpers, and progress formatting.
 
-The CLI links against USB capture code from the GUI project. `CMakeLists.txt` expects the sibling checkout at `../DomesdayDuplicator/gui-app/tools/DomesdayDuplicator` and uses the GUI USB classes (`UsbDeviceBase`, `UsbDeviceLibUsb`, `ILogger`). The build file is the source of truth for what is compiled.
+The CLI owns its active USB capture code locally under `src/` (`UsbDeviceBase`, `UsbDeviceLibUsb`, `ILogger`, and helpers). Do not compile from sibling checkouts. The build file is the source of truth for what is compiled.
 
 ## Commands and Behavior
 
@@ -39,7 +39,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-If configuration fails, first verify libusb development files and the sibling Domesday Duplicator source/module paths. Tests currently exercise CLI/config code and should not require connected USB or serial hardware.
+If configuration fails, first verify libusb development files and `pkg-config` metadata for `libusb-1.0`. Tests currently exercise CLI/config code and should not require connected USB or serial hardware.
 
 For real device validation, follow `HARDWARE_TESTS.md`.
 
@@ -75,4 +75,4 @@ When changing these flows, preserve the cleanup behavior in `runAutoCapture()` a
 
 ## Git/Workspace Notes
 
-This repository may sit next to the original GUI checkout; treat sibling files as dependencies, not owned source, unless the user explicitly asks to modify them. Prefer implementing CLI changes under `src/`, `tests/`, and build files. Do not revert unrelated worktree changes.
+This repository may sit next to the original GUI checkout, but active CLI changes should stay under `src/`, `tests/`, docs, and build files. Treat sibling files as out of scope unless the user explicitly asks to modify them. Do not revert unrelated worktree changes.

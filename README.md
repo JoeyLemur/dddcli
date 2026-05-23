@@ -6,9 +6,7 @@ This is hardware-facing software. Capture commands can write large files, and pl
 
 ## Build
 
-`dddcli` is built with CMake. The build expects the Domesday Duplicator GUI source checkout as a sibling directory because the CLI links against the shared USB capture classes from that project. CMake looks for the shared capture sources under `../DomesdayDuplicator/gui-app/tools/DomesdayDuplicator`.
-
-The repository also keeps copied GUI sources under `orig/` for reference, but the active build uses the sibling checkout path defined in `CMakeLists.txt`.
+`dddcli` is built with CMake. The active code is self-contained under `src/`. The build requires the libusb development package to be discoverable through `pkg-config` as `libusb-1.0`.
 
 ```sh
 cmake -S . -B build
