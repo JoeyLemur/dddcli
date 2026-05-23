@@ -17,6 +17,10 @@ void ConsoleLogger::Delete()
 
 bool ConsoleLogger::IsLogSeverityEnabledInternal(Severity severity) const
 {
+    if (quiet && severity != Severity::Critical && severity != Severity::Error)
+    {
+        return false;
+    }
     return ((unsigned int)filter & (unsigned int)severity) != 0;
 }
 
@@ -41,4 +45,3 @@ void ConsoleLogger::ProcessLogMessage(Severity severity, const wchar_t* message,
     std::lock_guard<std::mutex> lock(outputMutex);
     std::cerr << prefix << ": " << WStringToUtf8String(std::wstring(message, messageLength)) << '\n';
 }
-
