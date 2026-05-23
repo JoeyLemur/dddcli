@@ -401,6 +401,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             return 1;
         }
         discEnd = player.getCurrentFrame().address;
+        if (discEnd < 0)
+        {
+            std::cerr << "Could not determine CAV disc length\n";
+            return 1;
+        }
         recordAutoAddress(metadata, options.discType, discEnd);
     }
     else
@@ -412,6 +417,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             return 1;
         }
         discEnd = player.getCurrentTimeCode().address;
+        if (discEnd < 0)
+        {
+            std::cerr << "Could not determine CLV disc length\n";
+            return 1;
+        }
         recordAutoAddress(metadata, options.discType, discEnd);
     }
 
