@@ -150,6 +150,10 @@ int main()
 
     const char* invalidDurationArgv[] = { "dddcli", "capture", "--duration", "10oops" };
     assertParseThrows(invalidDurationArgv, 4);
+    const char* zeroDurationArgv[] = { "dddcli", "capture", "--duration", "0" };
+    assertParseThrows(zeroDurationArgv, 4);
+    const char* negativeDurationArgv[] = { "dddcli", "capture", "--duration", "-1" };
+    assertParseThrows(negativeDurationArgv, 4);
     const char* invalidDiskBufferSizeArgv[] = { "dddcli", "capture", "--disk-buffer-queue-size", "128MiBtypo" };
     assertParseThrows(invalidDiskBufferSizeArgv, 4);
 
@@ -260,6 +264,34 @@ int main()
         "1301abc",
     };
     assertParseThrows(invalidCavEndArgv, 10, validationBase);
+
+    const char* negativeCavStartArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "--start-address",
+        "-1",
+        "--end-address",
+        "1301",
+    };
+    assertParseThrows(negativeCavStartArgv, 10, validationBase);
+
+    const char* negativeCavEndArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "--start-address",
+        "1300",
+        "--end-address",
+        "-1",
+    };
+    assertParseThrows(negativeCavEndArgv, 10, validationBase);
 
     const char* preliminaryPartialArgv[] = {
         "dddcli",
@@ -456,11 +488,28 @@ int main()
     auto invalidDurationPath = std::filesystem::temp_directory_path() / "dddcli-invalid-duration-test.toml";
     assertConfigApplyThrows(invalidDurationPath, "[capture]\nduration_seconds = \"10oops\"\n");
 
+    auto zeroDurationPath = std::filesystem::temp_directory_path() / "dddcli-zero-duration-test.toml";
+    assertConfigApplyThrows(zeroDurationPath, "[capture]\nduration_seconds = 0\n");
+
+    auto negativeDurationPath = std::filesystem::temp_directory_path() / "dddcli-negative-duration-test.toml";
+    assertConfigApplyThrows(negativeDurationPath, "[capture]\nduration_seconds = -1\n");
+
     auto invalidSizePath = std::filesystem::temp_directory_path() / "dddcli-invalid-size-test.toml";
     assertConfigApplyThrows(invalidSizePath, "[usb]\ndisk_buffer_queue_size = \"128MiBtypo\"\n");
 
     auto invalidClvAddressPath = std::filesystem::temp_directory_path() / "dddcli-invalid-clv-address-test.toml";
     assertConfigApplyThrows(invalidClvAddressPath, "[auto_capture]\ndisc_type = \"clv\"\nstart_address = \"123456\"\n");
+
+    auto negativeCavStartPath = std::filesystem::temp_directory_path() / "dddcli-negative-cav-start-test.toml";
+    assertConfigApplyThrows(negativeCavStartPath, "[auto_capture]\ndisc_type = \"cav\"\nstart_address = -1\n");
+
+    auto negativeCavEndPath = std::filesystem::temp_directory_path() / "dddcli-negative-cav-end-test.toml";
+    assertConfigApplyThrows(negativeCavEndPath, "[auto_capture]\ndisc_type = \"cav\"\nend_address = -1\n");
+
+    CliOptions negativeConfiguredStart;
+    negativeConfiguredStart.discType = DiscTypeCli::Cav;
+    negativeConfiguredStart.startAddress = -1;
+    assertParseThrows(configuredPartialArgv, 2, negativeConfiguredStart);
 
     auto unknownConfigKeyPath = std::filesystem::temp_directory_path() / "dddcli-unknown-key-test.toml";
     assertConfigApplyThrows(unknownConfigKeyPath, "[capture]\nduration_second = 10\n");

@@ -96,6 +96,26 @@ int parseSignedInt(const std::string& value, const std::string& description)
     }
 }
 
+int parsePositiveInt(const std::string& value, const std::string& description)
+{
+    int parsed = parseSignedInt(value, description);
+    if (parsed <= 0)
+    {
+        throw std::runtime_error(description + " must be greater than zero: " + value);
+    }
+    return parsed;
+}
+
+int parseNonNegativeInt(const std::string& value, const std::string& description)
+{
+    int parsed = parseSignedInt(value, description);
+    if (parsed < 0)
+    {
+        throw std::runtime_error(description + " must be non-negative: " + value);
+    }
+    return parsed;
+}
+
 size_t parseSize(const std::string& value)
 {
     auto text = lower(trim(value));
@@ -225,8 +245,8 @@ void applyAddressFields(CliOptions& options)
 {
     if (options.discType != DiscTypeCli::Clv)
     {
-        if (!options.startAddressText.empty()) options.startAddress = parseSignedInt(options.startAddressText, "CAV address");
-        if (!options.endAddressText.empty()) options.endAddress = parseSignedInt(options.endAddressText, "CAV address");
+        if (!options.startAddressText.empty()) options.startAddress = parseNonNegativeInt(options.startAddressText, "CAV address");
+        if (!options.endAddressText.empty()) options.endAddress = parseNonNegativeInt(options.endAddressText, "CAV address");
         return;
     }
 
@@ -255,7 +275,7 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     else if (key == "capture.json") options.jsonOutput = stripQuotes(value);
     else if (key == "capture.format") options.captureFormat = parseFormat(stripQuotes(value));
     else if (key == "capture.test_mode") options.testMode = parseBool(value);
-    else if (key == "capture.duration_seconds") options.durationSeconds = parseSignedInt(stripQuotes(value), "duration");
+    else if (key == "capture.duration_seconds") options.durationSeconds = parsePositiveInt(stripQuotes(value), "duration");
     else if (key == "player.serial_device") options.serialDevice = stripQuotes(value);
     else if (key == "player.serial_speed") options.serialSpeed = parseSerialSpeed(stripQuotes(value));
     else if (key == "player.profile") options.playerProfile = parsePlayerProfile(stripQuotes(value));
@@ -324,7 +344,7 @@ ParsedCommandLine parseCommandLineImpl(int argc, char* argv[], const CliOptions&
         else if (arg == "--output-dir") parsed.options.outputDir = requireValue(i, argc, argv, arg);
         else if (arg == "--format") parsed.options.captureFormat = parseFormat(requireValue(i, argc, argv, arg));
         else if (arg == "--test-mode") parsed.options.testMode = true;
-        else if (arg == "--duration") parsed.options.durationSeconds = parseSignedInt(requireValue(i, argc, argv, arg), "duration");
+        else if (arg == "--duration") parsed.options.durationSeconds = parsePositiveInt(requireValue(i, argc, argv, arg), "duration");
         else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(i, argc, argv, arg);
         else if (arg == "--serial-speed") parsed.options.serialSpeed = parseSerialSpeed(requireValue(i, argc, argv, arg));
         else if (arg == "--player-profile") parsed.options.playerProfile = parsePlayerProfile(requireValue(i, argc, argv, arg));
@@ -538,7 +558,19 @@ bool shouldStopAutoCaptureForPlayerState(
 
 void validateAutoCaptureOptions(const ParsedCommandLine& parsed)
 {
-    if (parsed.command != "auto-capture" || parsed.options.autoCaptureMode != AutoCaptureModeCli::Partial)
+    if (parsed.command != "auto-capture")
+    {
+        return;
+    }
+    if (parsed.options.startAddress < 0)
+    {
+        throw std::runtime_error("auto-capture requires --start-address to be non-negative");
+    }
+    if (parsed.options.endAddress < 0)
+    {
+        throw std::runtime_error("auto-capture requires --end-address to be non-negative");
+    }
+    if (parsed.options.autoCaptureMode != AutoCaptureModeCli::Partial)
     {
         return;
     }

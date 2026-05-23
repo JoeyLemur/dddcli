@@ -123,22 +123,24 @@ int runListDevices(UsbDeviceLibUsb& usb, const CliOptions& options)
     return 0;
 }
 
-void writeMetadataIfRequested(const CliOptions& options, const CaptureMetadata& metadata, const UsbDeviceBase& usb)
+bool writeMetadataIfRequested(const CliOptions& options, const CaptureMetadata& metadata, const UsbDeviceBase& usb)
 {
     if (options.jsonOutput.empty())
     {
-        return;
+        return true;
     }
 
     std::string error;
     if (!writeCaptureMetadata(options.jsonOutput, metadata, usb, error))
     {
         std::cerr << "Failed to write JSON metadata: " << error << "\n";
+        return false;
     }
     else if (!options.quiet)
     {
         std::cerr << "Wrote JSON metadata to " << options.jsonOutput << "\n";
     }
+    return true;
 }
 
 int finishCapture(UsbDeviceBase& usb)
@@ -197,7 +199,11 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     progress.finish();
     int result = finishCapture(usb);
     metadata.duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
-    writeMetadataIfRequested(options, metadata, usb);
+    bool metadataWritten = writeMetadataIfRequested(options, metadata, usb);
+    if (!metadataWritten && result == 0)
+    {
+        return 1;
+    }
     return result;
 }
 
@@ -602,7 +608,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         keyLocked = false;
     }
     cleanupGuard.disarm();
-    writeMetadataIfRequested(options, metadata, usb);
+    bool metadataWritten = writeMetadataIfRequested(options, metadata, usb);
     if (autoCaptureError)
     {
         return 1;
@@ -610,6 +616,10 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     if (captureResult != 0)
     {
         return captureResult;
+    }
+    if (!metadataWritten)
+    {
+        return 1;
     }
     return cleanupFailed ? 1 : 0;
 }

@@ -393,7 +393,23 @@ bool PlayerSerial::sendCommand(const std::string& command)
     {
         return false;
     }
-    return write(fd, command.data(), command.size()) == (ssize_t)command.size();
+
+    size_t bytesWritten = 0;
+    while (bytesWritten < command.size())
+    {
+        ssize_t result = write(fd, command.data() + bytesWritten, command.size() - bytesWritten);
+        if (result > 0)
+        {
+            bytesWritten += (size_t)result;
+            continue;
+        }
+        if (result < 0 && errno == EINTR)
+        {
+            continue;
+        }
+        return false;
+    }
+    return true;
 }
 
 std::string PlayerSerial::readResponse(int timeoutMilliseconds, int expectedResponseCount)
