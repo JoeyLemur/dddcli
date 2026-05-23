@@ -239,6 +239,14 @@ bool isKnownPlayerAction(const std::string& action)
         action == "raw-command";
 }
 
+bool isKnownCommand(const std::string& command)
+{
+    return command == "list-devices" ||
+        command == "capture" ||
+        command == "auto-capture" ||
+        command == "player";
+}
+
 int runPlayer(const ParsedCommandLine& parsed)
 {
     const auto& action = parsed.playerAction.empty() ? std::string("status") : parsed.playerAction;
@@ -384,7 +392,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         return 1;
     }
 
-    int endAddress = options.endAddress;
+    int discEnd = 0;
     if (options.discType == DiscTypeCli::Cav)
     {
         if (!player.setPositionFrame(60000))
@@ -392,9 +400,8 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             std::cerr << "Could not determine CAV disc length\n";
             return 1;
         }
-        int discEnd = player.getCurrentFrame().address;
+        discEnd = player.getCurrentFrame().address;
         recordAutoAddress(metadata, options.discType, discEnd);
-        endAddress = options.autoCaptureMode == AutoCaptureModeCli::WholeDisc ? discEnd : (endAddress > 0 ? std::min(endAddress, discEnd) : discEnd);
     }
     else
     {
@@ -404,10 +411,27 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             std::cerr << "Could not determine CLV disc length\n";
             return 1;
         }
-        int discEnd = player.getCurrentTimeCode().address;
+        discEnd = player.getCurrentTimeCode().address;
         recordAutoAddress(metadata, options.discType, discEnd);
-        endAddress = options.autoCaptureMode == AutoCaptureModeCli::WholeDisc ? discEnd : (endAddress > 0 ? std::min(endAddress, discEnd) : discEnd);
     }
+
+    auto resolvedEnd = resolveAutoCaptureEndAddress(
+        options.autoCaptureMode,
+        options.endAddress,
+        options.startAddress,
+        discEnd);
+    if (!resolvedEnd.validRange)
+    {
+        std::cerr << "partial auto-capture start address is at or beyond detected disc end\n";
+        return 1;
+    }
+    if (options.autoCaptureMode == AutoCaptureModeCli::Partial && resolvedEnd.cappedToDiscEnd)
+    {
+        std::cerr << "warning: partial auto-capture end address " << options.endAddress
+                  << " exceeds detected disc end " << discEnd
+                  << "; capturing to detected disc end\n";
+    }
+    int endAddress = resolvedEnd.endAddress;
 
     bool captureFromLeadIn = options.autoCaptureMode == AutoCaptureModeCli::WholeDisc || options.autoCaptureMode == AutoCaptureModeCli::LeadIn;
     if (captureFromLeadIn)
@@ -593,6 +617,12 @@ int main(int argc, char* argv[])
         {
             printUsage();
             return 0;
+        }
+        if (!isKnownCommand(preliminary.command))
+        {
+            std::cerr << "Unknown command: " << preliminary.command << "\n";
+            printUsage();
+            return 1;
         }
 
         TomlConfig config;

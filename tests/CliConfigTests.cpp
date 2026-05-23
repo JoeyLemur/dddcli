@@ -471,10 +471,36 @@ int main()
     assertClvAddressThrows("123456");
     assertClvAddressThrows("01234000");
     assertClvAddressThrows("999999999999999999999999");
+
+    auto wholeDiscEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::WholeDisc, 90, 60, 75);
+    assert(wholeDiscEnd.endAddress == 75);
+    assert(!wholeDiscEnd.cappedToDiscEnd);
+    assert(wholeDiscEnd.validRange);
+    auto leadInDefaultEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::LeadIn, 0, 0, 75);
+    assert(leadInDefaultEnd.endAddress == 75);
+    assert(!leadInDefaultEnd.cappedToDiscEnd);
+    assert(leadInDefaultEnd.validRange);
+    auto leadInCappedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::LeadIn, 90, 0, 75);
+    assert(leadInCappedEnd.endAddress == 75);
+    assert(leadInCappedEnd.cappedToDiscEnd);
+    assert(leadInCappedEnd.validRange);
+    auto partialCappedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 90, 60, 75);
+    assert(partialCappedEnd.endAddress == 75);
+    assert(partialCappedEnd.cappedToDiscEnd);
+    assert(partialCappedEnd.validRange);
+    auto partialInvalidEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 90, 75, 75);
+    assert(partialInvalidEnd.endAddress == 75);
+    assert(partialInvalidEnd.cappedToDiscEnd);
+    assert(!partialInvalidEnd.validRange);
+
     assert(playerProfileForModelCode("15", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV4300D);
     assert(playerProfileForModelCode("07", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV2200);
     assert(playerProfileForModelCode("42", PlayerProfileCli::Auto) == PlayerProfileCli::GenericLevel3);
     assert(playerProfileForModelCode("07", PlayerProfileCli::PioneerLdV4300D) == PlayerProfileCli::PioneerLdV4300D);
+    assert(parsePlayerPhysicalPositionResponse("0001\r") == 2.56f);
+    assert(parsePlayerPhysicalPositionResponse("0010\r") == 40.96f);
+    assert(parsePlayerPhysicalPositionResponse("123") == 0.0f);
+    assert(parsePlayerPhysicalPositionResponse("zzzz\r") == 0.0f);
 
     auto timeCode5 = parsePlayerTimeCodeResponse("01234\r");
     assert(timeCode5.address == 754);

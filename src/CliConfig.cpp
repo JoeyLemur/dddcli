@@ -467,6 +467,28 @@ int parseClvAddressSeconds(const std::string& value)
     throw std::runtime_error("invalid CLV address length: " + value);
 }
 
+AutoCaptureEndAddress resolveAutoCaptureEndAddress(
+    AutoCaptureModeCli mode,
+    int requestedEndAddress,
+    int startAddress,
+    int discEndAddress)
+{
+    AutoCaptureEndAddress result;
+    if (mode == AutoCaptureModeCli::WholeDisc)
+    {
+        result.endAddress = discEndAddress;
+        return result;
+    }
+
+    result.endAddress = requestedEndAddress > 0 ? std::min(requestedEndAddress, discEndAddress) : discEndAddress;
+    result.cappedToDiscEnd = requestedEndAddress > discEndAddress;
+    if (mode == AutoCaptureModeCli::Partial && result.endAddress <= startAddress)
+    {
+        result.validRange = false;
+    }
+    return result;
+}
+
 bool shouldStopAutoCaptureAtAddress(
     DiscTypeCli discType,
     int address,

@@ -104,6 +104,13 @@ struct AutoCaptureStopState
     std::chrono::steady_clock::time_point clvPostRollStart{};
 };
 
+struct AutoCaptureEndAddress
+{
+    int endAddress = 0;
+    bool cappedToDiscEnd = false;
+    bool validRange = true;
+};
+
 class TomlConfig
 {
 public:
@@ -121,6 +128,11 @@ std::filesystem::path buildOutputPath(const CliOptions& options);
 UsbDeviceBase::CaptureFormat toUsbCaptureFormat(CaptureFormatCli format);
 std::string captureFormatExtension(CaptureFormatCli format);
 int parseClvAddressSeconds(const std::string& value);
+AutoCaptureEndAddress resolveAutoCaptureEndAddress(
+    AutoCaptureModeCli mode,
+    int requestedEndAddress,
+    int startAddress,
+    int discEndAddress);
 bool shouldStopAutoCaptureAtAddress(
     DiscTypeCli discType,
     int address,

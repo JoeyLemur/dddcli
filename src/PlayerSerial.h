@@ -67,6 +67,7 @@ private:
 
 PlayerProfileCli playerProfileForModelCode(const std::string& playerCode, PlayerProfileCli requestedProfile);
 bool playerRawCommandFits(std::string command);
+float parsePlayerPhysicalPositionResponse(const std::string& response);
 AddressResult parsePlayerFrameResponse(std::string response);
 AddressResult parsePlayerTimeCodeResponse(std::string response);
 std::string escapedSerialResponse(const std::string& response);

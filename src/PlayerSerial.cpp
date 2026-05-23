@@ -274,14 +274,7 @@ AddressResult PlayerSerial::getCurrentTimeCode()
 
 float PlayerSerial::getPhysicalPosition()
 {
-    auto response = commandResponse("2962MQ\r", NormalTimeoutMs);
-    if (response.size() < 4)
-    {
-        return 0;
-    }
-    unsigned long value = std::stoul(response, nullptr, 16);
-    value = ((value & 0xFF00) >> 8) | ((value & 0x00FF) << 8);
-    return (float)value / 100.0f;
+    return parsePlayerPhysicalPositionResponse(commandResponse("2962MQ\r", NormalTimeoutMs));
 }
 
 bool PlayerSerial::setPlayerState(PlayerStateCli state)
@@ -479,6 +472,27 @@ bool playerRawCommandFits(std::string command)
         command.push_back('\r');
     }
     return command.size() <= MaxPlayerSerialCommandBytes;
+}
+
+float parsePlayerPhysicalPositionResponse(const std::string& response)
+{
+    if (response.size() < 4)
+    {
+        return 0;
+    }
+
+    unsigned long value = 0;
+    try
+    {
+        value = std::stoul(response, nullptr, 16);
+    }
+    catch (const std::exception&)
+    {
+        return 0;
+    }
+
+    value = ((value & 0xFF00) >> 8) | ((value & 0x00FF) << 8);
+    return (float)value / 100.0f;
 }
 
 AddressResult parsePlayerFrameResponse(std::string response)

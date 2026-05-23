@@ -6,11 +6,11 @@
 
 - `whole-disc`: capture from spin-down/lead-in to the detected end address.
 - `lead-in`: capture from spin-down/lead-in to the requested or detected end address.
-- `partial`: seek to `--start-address` and capture until `--end-address`.
+- `partial`: seek to `--start-address` and capture until `--end-address`, unless the detected disc end is earlier.
 
 `partial` requires `--end-address`, and the normalized end address must be greater than the start address.
 
-For `whole-disc`, the detected disc end is always used. For `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. To detect the end address, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
+For `whole-disc`, the detected disc end is always used. For `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. For `partial`, an end address beyond the detected disc end is capped with a warning, but the capture still fails if the start address is at or beyond the detected disc end. To detect the end address, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
 
 ## Disc Type
 
