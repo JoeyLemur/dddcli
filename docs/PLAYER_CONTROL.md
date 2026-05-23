@@ -67,6 +67,8 @@ The command appends carriage return if needed. Output is escaped so carriage ret
 
 Raw commands are sent through the same serial connection setup as the other player actions. `--serial-speed auto` probes `9600`, `4800`, `2400`, then `1200`; specifying a speed tries only that speed.
 
+Raw commands are limited to 20 bytes including the trailing carriage return that the CLI appends when the command does not already include one.
+
 When validating a player, record raw responses for:
 
 ```sh
@@ -83,7 +85,7 @@ Keep the exact command, profile, serial speed, disc type, and raw escaped respon
 
 ## Status Output
 
-`dddcli player status` prints:
+`dddcli player` defaults to `status`. `dddcli player status` prints:
 
 - `model`
 - `playerProfile`

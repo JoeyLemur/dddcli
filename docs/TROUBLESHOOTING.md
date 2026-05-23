@@ -36,7 +36,7 @@ If no devices are found:
 - try a different cable or port
 - verify VID/PID overrides if using `--vid` or `--pid`
 
-The defaults are VID `0x1D50` and PID `0x603B`.
+The defaults are VID `0x1D50` and PID `0x603B`. When no matching devices are visible, `list-devices` prints `No Domesday Duplicator USB devices found` and exits non-zero.
 
 ## Player Does Not Connect
 
@@ -119,6 +119,8 @@ Capture files can be large. If capture fails after starting:
 - reduce USB memory pressure with `--small-usb-transfer-queue` if startup reports a USB memory limit
 - if writes cannot keep up, keep `--small-usb-transfers` enabled and try faster local storage
 - keep the JSON sidecar; it records the transfer result and sample statistics
+
+If `--json` points to a path in a missing directory, the CLI creates that directory before writing the sidecar.
 
 ## What To Record For Bugs
 

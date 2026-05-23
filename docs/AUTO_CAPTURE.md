@@ -61,6 +61,8 @@ All CLV forms normalize to elapsed seconds. `754`, `01234`, and `0123400` are eq
 
 Auto-capture metadata includes player model, player version, serial speed, disc type, disc status, and observed address bounds.
 
+The sidecar always includes a `captureInfo` object with the capture file path, capture format, test-mode flag, transfer result, duration, transfer and buffer counts, file size, sample statistics, clipping statistics, sequence marker presence, and UTC creation timestamp.
+
 For CAV captures:
 
 - `minFrameNumber`
@@ -85,3 +87,5 @@ The auto-capture path is designed to clean up on success, capture errors, and in
 - `SIGINT` and `SIGTERM` request an orderly stop; capture cleanup still runs before the process exits.
 
 If the final player cleanup command or key-lock release fails after capture, the CLI reports the failure and exits non-zero.
+
+Manual `capture` uses the same USB cleanup and metadata writer, but it does not add player or disc fields to `serialInfo`.

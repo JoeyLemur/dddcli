@@ -11,7 +11,8 @@ Guidance for agents working in this repository.
 - `src/PlayerSerial.*`: Pioneer-compatible serial player control using POSIX `termios`, `poll`, and raw command/response strings.
 - `src/CaptureMetadata.*`: JSON sidecar metadata generation for captures.
 - `src/ConsoleLogger.*`: adapter from the GUI USB logger interface to stderr.
-- `tests/CliConfigTests.cpp`: assertion-based tests for config, parsing, and output format helpers.
+- `src/ProgressLine.*`: compact stderr progress display for capture loops.
+- `tests/CliConfigTests.cpp`: assertion-based tests for config, parsing, output format helpers, player parsing helpers, and progress formatting.
 
 The CLI links against USB capture code from the GUI project. `CMakeLists.txt` expects the sibling checkout at `../DomesdayDuplicator/gui-app/tools/DomesdayDuplicator` and uses the GUI USB classes (`UsbDeviceBase`, `UsbDeviceLibUsb`, `ILogger`). The build file is the source of truth for what is compiled.
 

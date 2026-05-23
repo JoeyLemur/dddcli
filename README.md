@@ -8,6 +8,8 @@ This is hardware-facing software. Capture commands can write large files, and pl
 
 `dddcli` is built with CMake. The build expects the Domesday Duplicator GUI source checkout as a sibling directory because the CLI links against the shared USB capture classes from that project. CMake looks for the shared capture sources under `../DomesdayDuplicator/gui-app/tools/DomesdayDuplicator`.
 
+The repository also keeps copied GUI sources under `orig/` for reference, but the active build uses the sibling checkout path defined in `CMakeLists.txt`.
+
 ```sh
 cmake -S . -B build
 cmake --build build
@@ -72,7 +74,7 @@ Run a partial CLV auto-capture:
 - `dddcli list-devices`: print visible Domesday Duplicator USB device paths.
 - `dddcli capture`: start a manual USB capture.
 - `dddcli auto-capture`: coordinate USB capture with serial player control.
-- `dddcli player status`: print model, active profile, player state, disc type, and disc status.
+- `dddcli player` or `dddcli player status`: print model, active profile, player state, disc type, and disc status.
 - `dddcli player play|pause|stop|still`: send basic transport commands.
 - `dddcli player read-user-codes`: query standard and Pioneer user code fields.
 - `dddcli player raw-command <command>`: send a raw serial command and print an escaped response.
@@ -87,7 +89,7 @@ Supported capture formats are:
 
 If `--output` has no extension, the selected format extension is added. If no output path is provided, the tool creates a timestamped file under `--output-dir`, which defaults to the current directory. Generated filenames use `RF-Sample_YYYY-MM-DD_HH-MM-SS` or `TestData_YYYY-MM-DD_HH-MM-SS` when `--test-mode` is enabled.
 
-Use `--json <file>` to write a metadata sidecar. For auto-captures, CAV metadata records `minFrameNumber` and `maxFrameNumber`; CLV metadata records `minTimeCode` and `maxTimeCode` as normalized elapsed seconds.
+Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureInfo` for every capture, including the capture path, format, transfer result, duration, sample counts, clipping counts, and UTC creation timestamp. Auto-captures also populate `serialInfo` with player and disc fields; CAV metadata records `minFrameNumber` and `maxFrameNumber`, while CLV metadata records `minTimeCode` and `maxTimeCode` as normalized elapsed seconds.
 
 ## Documentation
 

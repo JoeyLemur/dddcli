@@ -45,6 +45,8 @@ Record:
 - `discType`
 - `discStatus`
 
+`dddcli player` without an explicit action should produce the same status output as `dddcli player status`.
+
 Expected profile mappings:
 
 - LD-V4300D model code `15`: `pioneer-ld-v4300d`
@@ -209,7 +211,7 @@ Expected:
 
 - capture file is created
 - JSON sidecar is created
-- transfer result is `success` or an understood hardware error
+- `captureInfo.transferResultString` is `success`, `forced abort`, or an understood hardware error if the test is interrupted or hardware fails
 
 ## 9. Results To Keep
 

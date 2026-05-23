@@ -4,6 +4,8 @@
 
 The config parser supports section headers, `key = value`, comments marked with `#`, quoted or unquoted scalar values, and simple booleans. It is intentionally not a full TOML implementation: arrays are not supported, `#` starts a comment outside quoted text, and unknown keys fail startup.
 
+Values are applied before command-line parsing, so command-line flags always win over matching config keys.
+
 ## Config File Location
 
 The default config path is chosen in this order:
@@ -75,6 +77,8 @@ Capture options:
 - `--test-mode`: capture the DdD test pattern.
 - `--duration <seconds>`: stop manual capture after this duration.
 
+If `--output` is omitted, the generated filename is placed under `--output-dir`. If `--output` is present without an extension, the selected capture format extension is appended.
+
 Player options:
 
 - `--serial-device <path>`: serial device, such as `/dev/ttyUSB0`.
@@ -112,7 +116,7 @@ The supported config keys are:
 - `[auto_capture] end_address`
 - `[auto_capture] key_lock`
 
-There is currently no config key for `--output`, `--debug`, or `--quiet`.
+There is currently no config key for `--output`, `--debug`, `--quiet`, or the `--large-*` CLI convenience toggles. Set the matching boolean keys to `false` for large/default USB transfer behavior.
 
 ## Defaults And Aliases
 
