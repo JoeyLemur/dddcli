@@ -396,8 +396,11 @@ bool PlayerSerial::configurePort(SerialSpeedCli speed, std::string& error)
 
 bool PlayerSerial::sendCommand(const std::string& command)
 {
-    auto limited = command.substr(0, 20);
-    return write(fd, limited.data(), limited.size()) == (ssize_t)limited.size();
+    if (command.size() > MaxPlayerSerialCommandBytes)
+    {
+        return false;
+    }
+    return write(fd, command.data(), command.size()) == (ssize_t)command.size();
 }
 
 std::string PlayerSerial::readResponse(int timeoutMilliseconds, int expectedResponseCount)
@@ -467,6 +470,15 @@ PlayerProfileCli playerProfileForModelCode(const std::string& playerCode, Player
     if (playerCode == "15") return PlayerProfileCli::PioneerLdV4300D;
     if (playerCode == "07") return PlayerProfileCli::PioneerLdV2200;
     return PlayerProfileCli::GenericLevel3;
+}
+
+bool playerRawCommandFits(std::string command)
+{
+    if (!command.ends_with('\r'))
+    {
+        command.push_back('\r');
+    }
+    return command.size() <= MaxPlayerSerialCommandBytes;
 }
 
 AddressResult parsePlayerFrameResponse(std::string response)

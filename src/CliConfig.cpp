@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 
@@ -43,6 +44,34 @@ bool parseBool(const std::string& value)
     throw std::runtime_error("invalid boolean value: " + value);
 }
 
+int parseSignedInt(const std::string& value, const std::string& description)
+{
+    auto text = trim(value);
+    if (text.empty())
+    {
+        throw std::runtime_error("invalid " + description + ": " + value);
+    }
+
+    size_t parsedLength = 0;
+    try
+    {
+        int parsed = std::stoi(text, &parsedLength);
+        if (parsedLength != text.size())
+        {
+            throw std::runtime_error("invalid " + description + ": " + value);
+        }
+        return parsed;
+    }
+    catch (const std::invalid_argument&)
+    {
+        throw std::runtime_error("invalid " + description + ": " + value);
+    }
+    catch (const std::out_of_range&)
+    {
+        throw std::runtime_error(description + " out of range: " + value);
+    }
+}
+
 size_t parseSize(const std::string& value)
 {
     auto text = lower(trim(value));
@@ -57,7 +86,28 @@ size_t parseSize(const std::string& value)
         multiplier = 1000 * 1000;
         text.resize(text.size() - 2);
     }
-    return (size_t)std::stoull(trim(text)) * multiplier;
+
+    text = trim(text);
+    if (text.empty() || !std::all_of(text.begin(), text.end(), [](unsigned char ch) { return std::isdigit(ch); }))
+    {
+        throw std::runtime_error("invalid size: " + value);
+    }
+
+    unsigned long long parsed = 0;
+    try
+    {
+        parsed = std::stoull(text);
+    }
+    catch (const std::out_of_range&)
+    {
+        throw std::runtime_error("size out of range: " + value);
+    }
+
+    if (parsed > std::numeric_limits<size_t>::max() / multiplier)
+    {
+        throw std::runtime_error("size out of range: " + value);
+    }
+    return (size_t)parsed * multiplier;
 }
 
 CaptureFormatCli parseFormat(const std::string& value)
@@ -143,8 +193,8 @@ void applyAddressFields(CliOptions& options)
 {
     if (options.discType != DiscTypeCli::Clv)
     {
-        if (!options.startAddressText.empty()) options.startAddress = std::stoi(options.startAddressText);
-        if (!options.endAddressText.empty()) options.endAddress = std::stoi(options.endAddressText);
+        if (!options.startAddressText.empty()) options.startAddress = parseSignedInt(options.startAddressText, "CAV address");
+        if (!options.endAddressText.empty()) options.endAddress = parseSignedInt(options.endAddressText, "CAV address");
         return;
     }
 
@@ -173,7 +223,7 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     else if (key == "capture.json") options.jsonOutput = stripQuotes(value);
     else if (key == "capture.format") options.captureFormat = parseFormat(stripQuotes(value));
     else if (key == "capture.test_mode") options.testMode = parseBool(value);
-    else if (key == "capture.duration_seconds") options.durationSeconds = std::stoi(stripQuotes(value));
+    else if (key == "capture.duration_seconds") options.durationSeconds = parseSignedInt(stripQuotes(value), "duration");
     else if (key == "player.serial_device") options.serialDevice = stripQuotes(value);
     else if (key == "player.serial_speed") options.serialSpeed = parseSerialSpeed(stripQuotes(value));
     else if (key == "player.profile") options.playerProfile = parsePlayerProfile(stripQuotes(value));
@@ -241,7 +291,7 @@ ParsedCommandLine parseCommandLineImpl(int argc, char* argv[], const CliOptions&
         else if (arg == "--output-dir") parsed.options.outputDir = requireValue(i, argc, argv, arg);
         else if (arg == "--format") parsed.options.captureFormat = parseFormat(requireValue(i, argc, argv, arg));
         else if (arg == "--test-mode") parsed.options.testMode = true;
-        else if (arg == "--duration") parsed.options.durationSeconds = std::stoi(requireValue(i, argc, argv, arg));
+        else if (arg == "--duration") parsed.options.durationSeconds = parseSignedInt(requireValue(i, argc, argv, arg), "duration");
         else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(i, argc, argv, arg);
         else if (arg == "--serial-speed") parsed.options.serialSpeed = parseSerialSpeed(requireValue(i, argc, argv, arg));
         else if (arg == "--player-profile") parsed.options.playerProfile = parsePlayerProfile(requireValue(i, argc, argv, arg));

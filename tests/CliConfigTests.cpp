@@ -7,6 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
 namespace
 {
@@ -36,6 +37,30 @@ void assertParseThrows(const char* const* argv, int argc, const CliOptions& base
         threw = true;
     }
     assert(threw);
+}
+
+void assertConfigApplyThrows(const std::filesystem::path& path, const std::string& contents)
+{
+    {
+        std::ofstream file(path);
+        file << contents;
+    }
+
+    TomlConfig config;
+    std::string error;
+    assert(config.load(path, error));
+    bool threw = false;
+    try
+    {
+        CliOptions options;
+        config.applyTo(options);
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    assert(threw);
+    std::filesystem::remove(path);
 }
 }
 
@@ -108,6 +133,11 @@ int main()
     assert(parsed.options.jsonOutput == "/tmp/capture.json");
     assert(parsed.options.durationSeconds.has_value());
     assert(parsed.options.durationSeconds.value() == 1);
+
+    const char* invalidDurationArgv[] = { "dddcli", "capture", "--duration", "10oops" };
+    assertParseThrows(invalidDurationArgv, 4);
+    const char* invalidDiskBufferSizeArgv[] = { "dddcli", "capture", "--disk-buffer-queue-size", "128MiBtypo" };
+    assertParseThrows(invalidDiskBufferSizeArgv, 4);
 
     const char* configArgv[] = {
         "dddcli",
@@ -187,6 +217,34 @@ int main()
     assert(validPartialParsed.options.startAddress == 1300);
     assert(validPartialParsed.options.endAddress == 1301);
 
+    const char* invalidCavStartArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "--start-address",
+        "1300abc",
+        "--end-address",
+        "1301",
+    };
+    assertParseThrows(invalidCavStartArgv, 10, validationBase);
+
+    const char* invalidCavEndArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "--start-address",
+        "1300",
+        "--end-address",
+        "1301abc",
+    };
+    assertParseThrows(invalidCavEndArgv, 10, validationBase);
+
     const char* preliminaryPartialArgv[] = {
         "dddcli",
         "auto-capture",
@@ -260,6 +318,10 @@ int main()
     assert(rawParsed.command == "player");
     assert(rawParsed.playerAction == "raw-command");
     assert(rawParsed.playerRawCommand == "?T");
+    assert(playerRawCommandFits(std::string(19, 'A')));
+    assert(playerRawCommandFits(std::string(19, 'A') + "\r"));
+    assert(!playerRawCommandFits(std::string(20, 'A')));
+    assert(!playerRawCommandFits(std::string(21, 'A') + "\r"));
 
     auto path = std::filesystem::temp_directory_path() / "dddcli-test.toml";
     {
@@ -324,6 +386,12 @@ int main()
         invalidConfigThrew = true;
     }
     assert(invalidConfigThrew);
+
+    auto invalidDurationPath = std::filesystem::temp_directory_path() / "dddcli-invalid-duration-test.toml";
+    assertConfigApplyThrows(invalidDurationPath, "[capture]\nduration_seconds = \"10oops\"\n");
+
+    auto invalidSizePath = std::filesystem::temp_directory_path() / "dddcli-invalid-size-test.toml";
+    assertConfigApplyThrows(invalidSizePath, "[usb]\ndisk_buffer_queue_size = \"128MiBtypo\"\n");
 
     assert(parseClvAddressSeconds("754") == 754);
     assert(parseClvAddressSeconds("01234") == 754);

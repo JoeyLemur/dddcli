@@ -230,13 +230,19 @@ int runPlayerTransportAction(PlayerSerial& player, const std::string& action, Pl
 
 int runPlayer(const ParsedCommandLine& parsed)
 {
+    const auto& action = parsed.playerAction.empty() ? std::string("status") : parsed.playerAction;
+    if (action == "raw-command" && !parsed.playerRawCommand.empty() && !playerRawCommandFits(parsed.playerRawCommand))
+    {
+        std::cerr << "raw-command exceeds " << MaxPlayerSerialCommandBytes << " bytes including carriage return\n";
+        return 1;
+    }
+
     PlayerSerial player;
     if (!connectPlayer(player, parsed.options))
     {
         return 1;
     }
 
-    const auto& action = parsed.playerAction.empty() ? std::string("status") : parsed.playerAction;
     if (action == "status")
     {
         std::cout << "model=" << player.modelName() << "\n";

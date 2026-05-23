@@ -1,8 +1,11 @@
 #pragma once
 
 #include "CliConfig.h"
+#include <cstddef>
 #include <optional>
 #include <string>
+
+constexpr size_t MaxPlayerSerialCommandBytes = 20;
 
 struct AddressResult
 {
@@ -63,6 +66,7 @@ private:
 };
 
 PlayerProfileCli playerProfileForModelCode(const std::string& playerCode, PlayerProfileCli requestedProfile);
+bool playerRawCommandFits(std::string command);
 AddressResult parsePlayerFrameResponse(std::string response);
 AddressResult parsePlayerTimeCodeResponse(std::string response);
 std::string escapedSerialResponse(const std::string& response);
