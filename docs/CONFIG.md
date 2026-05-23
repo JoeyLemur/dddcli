@@ -2,7 +2,7 @@
 
 `dddcli` accepts options from a small TOML-style config file and from command-line flags. Command-line flags override config values.
 
-The config parser supports section headers, `key = value`, comments marked with `#`, quoted or unquoted scalar values, and simple booleans. It is intentionally not a full TOML implementation: `#` starts a comment anywhere on a line, even inside quoted text, arrays are not supported, and unknown keys are ignored.
+The config parser supports section headers, `key = value`, comments marked with `#`, quoted or unquoted scalar values, and simple booleans. It is intentionally not a full TOML implementation: arrays are not supported, `#` starts a comment outside quoted text, and unknown keys fail startup.
 
 ## Config File Location
 
@@ -18,10 +18,13 @@ Missing config files are allowed. Syntax errors fail startup.
 
 ## Example
 
+An example config is available at [`dddcli.example.toml`](../dddcli.example.toml).
+
 ```toml
 [usb]
 vid = "0x1D50"
 pid = "0x603B"
+preferred_device = ""
 use_small_usb_transfers = true
 use_small_usb_transfer_queue = false
 disk_buffer_queue_size = "256MiB"
@@ -31,6 +34,7 @@ output_dir = "/capture"
 format = "lds"
 json = "/capture/latest.json"
 test_mode = false
+# Remove this line for captures that should run until interrupted.
 duration_seconds = 10
 
 [player]

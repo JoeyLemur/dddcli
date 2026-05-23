@@ -36,6 +36,30 @@ std::string stripQuotes(std::string value)
     return value;
 }
 
+std::string stripComment(std::string line)
+{
+    bool inSingleQuote = false;
+    bool inDoubleQuote = false;
+    for (size_t i = 0; i < line.size(); ++i)
+    {
+        char ch = line[i];
+        if (ch == '\'' && !inDoubleQuote)
+        {
+            inSingleQuote = !inSingleQuote;
+        }
+        else if (ch == '"' && !inSingleQuote)
+        {
+            inDoubleQuote = !inDoubleQuote;
+        }
+        else if (ch == '#' && !inSingleQuote && !inDoubleQuote)
+        {
+            line.resize(i);
+            break;
+        }
+    }
+    return line;
+}
+
 bool parseBool(const std::string& value)
 {
     auto lowered = lower(trim(value));
@@ -181,7 +205,15 @@ uint16_t parseU16(const std::string& value)
         throw std::runtime_error("invalid USB ID: " + value);
     }
 
-    unsigned long parsed = std::stoul(digits, nullptr, base);
+    unsigned long parsed = 0;
+    try
+    {
+        parsed = std::stoul(digits, nullptr, base);
+    }
+    catch (const std::out_of_range&)
+    {
+        throw std::runtime_error("USB ID out of range: " + value);
+    }
     if (parsed > 0xFFFF)
     {
         throw std::runtime_error("USB ID out of range: " + value);
@@ -232,6 +264,7 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     else if (key == "auto_capture.start_address") options.startAddressText = stripQuotes(value);
     else if (key == "auto_capture.end_address") options.endAddressText = stripQuotes(value);
     else if (key == "auto_capture.key_lock") options.keyLock = parseBool(value);
+    else throw std::runtime_error("unknown config key: " + key);
 }
 
 ParsedCommandLine parseCommandLineImpl(int argc, char* argv[], const CliOptions& baseOptions, bool validate)
@@ -348,12 +381,7 @@ bool TomlConfig::load(const std::filesystem::path& path, std::string& error, boo
     while (std::getline(stream, line))
     {
         ++lineNumber;
-        auto comment = line.find('#');
-        if (comment != std::string::npos)
-        {
-            line.resize(comment);
-        }
-        line = trim(line);
+        line = trim(stripComment(line));
         if (line.empty())
         {
             continue;
@@ -420,10 +448,9 @@ int parseClvAddressSeconds(const std::string& value)
         throw std::runtime_error("invalid CLV address: " + value);
     }
 
-    int raw = std::stoi(text);
     if (text.size() < 5)
     {
-        return raw;
+        return std::stoi(text);
     }
     if (text.size() == 5 || text.size() == 7)
     {

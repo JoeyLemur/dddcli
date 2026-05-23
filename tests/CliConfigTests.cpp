@@ -186,6 +186,8 @@ int main()
 
     const char* outOfRangeVidArgv[] = { "dddcli", "capture", "--vid", "70000" };
     assertParseThrows(outOfRangeVidArgv, 4);
+    const char* hugeVidArgv[] = { "dddcli", "capture", "--vid", "999999999999999999999999" };
+    assertParseThrows(hugeVidArgv, 4);
     const char* outOfRangePidArgv[] = { "dddcli", "capture", "--pid", "0x10000" };
     assertParseThrows(outOfRangePidArgv, 4);
     const char* negativeVidArgv[] = { "dddcli", "capture", "--vid", "-1" };
@@ -402,6 +404,28 @@ int main()
     assert(options.startAddress == 754);
     assert(options.endAddress == 754);
 
+    auto quotedHashPath = std::filesystem::temp_directory_path() / "dddcli-quoted-hash-test.toml";
+    {
+        std::ofstream file(quotedHashPath);
+        file << "[capture]\n";
+        file << "output_dir = \"/tmp/capture#1\"\n";
+    }
+    assert(config.load(quotedHashPath, error));
+    CliOptions quotedHashOptions;
+    config.applyTo(quotedHashOptions);
+    assert(quotedHashOptions.outputDir == "/tmp/capture#1");
+
+    auto quotedHashCommentPath = std::filesystem::temp_directory_path() / "dddcli-quoted-hash-comment-test.toml";
+    {
+        std::ofstream file(quotedHashCommentPath);
+        file << "[capture]\n";
+        file << "output_dir = \"/tmp/capture#1\" # comment\n";
+    }
+    assert(config.load(quotedHashCommentPath, error));
+    CliOptions quotedHashCommentOptions;
+    config.applyTo(quotedHashCommentOptions);
+    assert(quotedHashCommentOptions.outputDir == "/tmp/capture#1");
+
     auto missingPath = std::filesystem::temp_directory_path() / "dddcli-missing-test.toml";
     std::filesystem::remove(missingPath);
     error.clear();
@@ -438,11 +462,15 @@ int main()
     auto invalidClvAddressPath = std::filesystem::temp_directory_path() / "dddcli-invalid-clv-address-test.toml";
     assertConfigApplyThrows(invalidClvAddressPath, "[auto_capture]\ndisc_type = \"clv\"\nstart_address = \"123456\"\n");
 
+    auto unknownConfigKeyPath = std::filesystem::temp_directory_path() / "dddcli-unknown-key-test.toml";
+    assertConfigApplyThrows(unknownConfigKeyPath, "[capture]\nduration_second = 10\n");
+
     assert(parseClvAddressSeconds("754") == 754);
     assert(parseClvAddressSeconds("01234") == 754);
     assert(parseClvAddressSeconds("0123400") == 754);
     assertClvAddressThrows("123456");
     assertClvAddressThrows("01234000");
+    assertClvAddressThrows("999999999999999999999999");
     assert(playerProfileForModelCode("15", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV4300D);
     assert(playerProfileForModelCode("07", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV2200);
     assert(playerProfileForModelCode("42", PlayerProfileCli::Auto) == PlayerProfileCli::GenericLevel3);
@@ -502,6 +530,8 @@ int main()
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Cav, activePostRoll, PlayerStateCli::Stop));
 
     std::filesystem::remove(path);
+    std::filesystem::remove(quotedHashPath);
+    std::filesystem::remove(quotedHashCommentPath);
     std::filesystem::remove(invalidUsbIdPath);
     return 0;
 }

@@ -1,0 +1,37 @@
+# Example dddcli configuration.
+#
+# Copy this to one of the default config locations:
+#   $XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml
+#   $HOME/.config/domesday-duplicator/dddcli.toml
+#   ./dddcli.toml
+#
+# Command-line flags override values from this file.
+
+[usb]
+vid = "0x1D50"
+pid = "0x603B"
+preferred_device = ""
+use_small_usb_transfers = true
+use_small_usb_transfer_queue = false
+disk_buffer_queue_size = "256MiB"
+
+[capture]
+output_dir = "."
+format = "lds"
+json = ""
+test_mode = false
+# Remove this line for captures that should run until interrupted.
+duration_seconds = 10
+
+[player]
+serial_device = "/dev/ttyUSB0"
+serial_speed = "auto"
+profile = "auto"
+
+[auto_capture]
+disc_type = "clv"
+mode = "partial"
+# CLV addresses may be seconds, HMMSS, or HMMSSFF. CAV addresses are frames.
+start_address = "60"
+end_address = "90"
+key_lock = false

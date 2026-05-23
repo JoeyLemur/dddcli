@@ -90,7 +90,14 @@ bool writeCaptureMetadata(
     const UsbDeviceBase& usb,
     std::string& error)
 {
-    std::filesystem::create_directories(jsonPath.parent_path().empty() ? "." : jsonPath.parent_path());
+    auto parentPath = jsonPath.parent_path().empty() ? std::filesystem::path(".") : jsonPath.parent_path();
+    std::error_code createDirectoriesError;
+    std::filesystem::create_directories(parentPath, createDirectoriesError);
+    if (createDirectoriesError)
+    {
+        error = "failed to create directory " + parentPath.string() + ": " + createDirectoriesError.message();
+        return false;
+    }
 
     std::ostringstream out;
     out << "{\n";
@@ -147,4 +154,3 @@ bool writeCaptureMetadata(
     }
     return true;
 }
-
