@@ -65,6 +65,8 @@ Use `player raw-command` to collect exact player responses without adding new co
 
 The command appends carriage return if needed. Output is escaped so carriage returns, newlines, tabs, backslashes, and non-printable bytes can be recorded safely.
 
+Raw commands are sent through the same serial connection setup as the other player actions. `--serial-speed auto` probes `9600`, `4800`, `2400`, then `1200`; specifying a speed tries only that speed.
+
 When validating a player, record raw responses for:
 
 ```sh

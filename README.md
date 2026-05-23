@@ -6,7 +6,7 @@ This is hardware-facing software. Capture commands can write large files, and pl
 
 ## Build
 
-`dddcli` is built with CMake. The build expects the Domesday Duplicator GUI source checkout as a sibling directory because the CLI links against the shared USB capture classes from that project.
+`dddcli` is built with CMake. The build expects the Domesday Duplicator GUI source checkout as a sibling directory because the CLI links against the shared USB capture classes from that project. CMake looks for the shared capture sources under `../DomesdayDuplicator/gui-app/tools/DomesdayDuplicator`.
 
 ```sh
 cmake -S . -B build
@@ -85,7 +85,7 @@ Supported capture formats are:
 - `raw`: 16-bit signed samples.
 - `cds`: 10-bit packed CD capture format.
 
-If `--output` has no extension, the selected format extension is added. If no output path is provided, the tool creates a timestamped file under `--output-dir`.
+If `--output` has no extension, the selected format extension is added. If no output path is provided, the tool creates a timestamped file under `--output-dir`, which defaults to the current directory. Generated filenames use `RF-Sample_YYYY-MM-DD_HH-MM-SS` or `TestData_YYYY-MM-DD_HH-MM-SS` when `--test-mode` is enabled.
 
 Use `--json <file>` to write a metadata sidecar. For auto-captures, CAV metadata records `minFrameNumber` and `maxFrameNumber`; CLV metadata records `minTimeCode` and `maxTimeCode` as normalized elapsed seconds.
 

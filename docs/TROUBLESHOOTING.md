@@ -116,6 +116,8 @@ Capture files can be large. If capture fails after starting:
 - confirm the output filesystem has enough free space
 - write to fast local storage when possible
 - try the default `.lds` format first
+- reduce USB memory pressure with `--small-usb-transfer-queue` if startup reports a USB memory limit
+- if writes cannot keep up, keep `--small-usb-transfers` enabled and try faster local storage
 - keep the JSON sidecar; it records the transfer result and sample statistics
 
 ## What To Record For Bugs

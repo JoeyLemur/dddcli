@@ -2,7 +2,7 @@
 
 `dddcli` accepts options from a small TOML-style config file and from command-line flags. Command-line flags override config values.
 
-The config parser supports section headers, `key = value`, comments beginning with `#`, quoted or unquoted scalar values, and simple booleans. It is intentionally not a full TOML implementation.
+The config parser supports section headers, `key = value`, comments marked with `#`, quoted or unquoted scalar values, and simple booleans. It is intentionally not a full TOML implementation: `#` starts a comment anywhere on a line, even inside quoted text, arrays are not supported, and unknown keys are ignored.
 
 ## Config File Location
 
@@ -31,6 +31,7 @@ output_dir = "/capture"
 format = "lds"
 json = "/capture/latest.json"
 test_mode = false
+duration_seconds = 10
 
 [player]
 serial_device = "/dev/ttyUSB0"
@@ -108,6 +109,27 @@ The supported config keys are:
 - `[auto_capture] key_lock`
 
 There is currently no config key for `--output`, `--debug`, or `--quiet`.
+
+## Defaults And Aliases
+
+Defaults:
+
+- USB VID/PID: `0x1D50:0x603B`
+- disk buffer queue size: `256MiB`
+- output directory: `.`
+- capture format: `lds`
+- serial speed: `auto`
+- player profile: `auto`
+- auto-capture mode: `whole-disc`
+- USB transfers: small transfers enabled, reduced transfer queue disabled
+
+The command line and config parser accept the canonical values shown above plus a few compatibility aliases:
+
+- capture formats: `ten-bit-packed` or `10bit` for `lds`, `sixteen-bit-signed` or `16bit` for `raw`, and `ten-bit-cd-packed` or `cd` for `cds`
+- player profiles: `generic`, `generic-level-3`, `ld-v4300d`, `ldv4300d`, `ld-v2200`, and `ldv2200`
+- auto-capture modes: `whole` for `whole-disc` and `leadin` for `lead-in`
+- booleans in config: `true/false`, `1/0`, `yes/no`, and `on/off`
+- sizes: plain bytes, `mb`, or `mib`
 
 ## CLV Addresses
 

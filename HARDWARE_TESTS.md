@@ -4,6 +4,8 @@ Use this checklist when real Domesday Duplicator USB hardware and a Pioneer seri
 
 These tests can move the player, spin the disc, seek, key-lock the panel, and write capture files. Start with a non-valuable test disc and keep output paths pointed at scratch storage.
 
+Commands below use explicit output paths. If `--output` is omitted, captures are written under `--output-dir` or the current directory using timestamped `RF-Sample_...` or `TestData_...` filenames.
+
 ## 1. Preflight
 
 - Build and run the software-only tests:

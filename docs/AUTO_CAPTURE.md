@@ -1,6 +1,6 @@
 # Auto Capture
 
-`auto-capture` coordinates USB capture with a serial-controlled LaserDisc player. It verifies the requested disc type, positions the player, starts USB capture, starts playback, monitors the player address, then stops capture and writes metadata.
+`auto-capture` coordinates USB capture with a serial-controlled LaserDisc player. It verifies the requested disc type, probes the disc end address, positions the player, starts USB capture, starts playback, monitors the player address, then stops capture and writes metadata.
 
 ## Modes
 
@@ -9,6 +9,8 @@
 - `partial`: seek to `--start-address` and capture until `--end-address`.
 
 `partial` requires `--end-address`, and the normalized end address must be greater than the start address.
+
+For `whole-disc`, the detected disc end is always used. For `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. To detect the end address, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
 
 ## Disc Type
 
@@ -80,5 +82,6 @@ The auto-capture path is designed to clean up on success, capture errors, and in
 - CAV captures end by stopping the player.
 - CLV captures end by pausing the player.
 - auto-capture address errors leave the player in still-frame for inspection.
+- `SIGINT` and `SIGTERM` request an orderly stop; capture cleanup still runs before the process exits.
 
 If the final player cleanup command or key-lock release fails after capture, the CLI reports the failure and exits non-zero.
