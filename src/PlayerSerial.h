@@ -4,16 +4,6 @@
 #include <optional>
 #include <string>
 
-enum class PlayerStateCli
-{
-    Unknown,
-    Stop,
-    Play,
-    PlayWithStopCodesDisabled,
-    Pause,
-    StillFrame,
-};
-
 struct AddressResult
 {
     int address = -1;
@@ -27,7 +17,7 @@ public:
     PlayerSerial();
     ~PlayerSerial();
 
-    bool connect(const std::string& serialDevice, SerialSpeedCli speed, std::string& error);
+    bool connect(const std::string& serialDevice, SerialSpeedCli speed, PlayerProfileCli requestedProfile, std::string& error);
     void disconnect();
     bool connected() const;
 
@@ -35,6 +25,7 @@ public:
     std::string modelName() const;
     std::string versionNumber() const;
     SerialSpeedCli detectedSpeed() const;
+    PlayerProfileCli activeProfile() const;
 
     PlayerStateCli getPlayerState();
     DiscTypeCli getDiscType();
@@ -50,6 +41,7 @@ public:
     bool setKeyLock(bool locked);
     bool setPositionFrame(int address);
     bool setPositionTimeCode(int address);
+    std::string rawCommand(std::string command, int expectedResponseCount = 1);
 
 private:
     bool tryOpen(const std::string& serialDevice, SerialSpeedCli speed, std::string& error);
@@ -66,10 +58,14 @@ private:
     std::string currentModelCode;
     std::string currentModelName;
     std::string currentVersionNumber;
+    PlayerProfileCli currentProfile = PlayerProfileCli::GenericLevel3;
     bool physicalPositionSupported = false;
 };
 
+PlayerProfileCli playerProfileForModelCode(const std::string& playerCode, PlayerProfileCli requestedProfile);
+AddressResult parsePlayerFrameResponse(std::string response);
+AddressResult parsePlayerTimeCodeResponse(std::string response);
+std::string escapedSerialResponse(const std::string& response);
 std::string playerStateToString(PlayerStateCli state);
 std::string discTypeToString(DiscTypeCli discType);
 std::string serialSpeedToString(SerialSpeedCli speed);
-

@@ -1,6 +1,7 @@
 #include "CliConfig.h"
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -79,6 +80,16 @@ SerialSpeedCli parseSerialSpeed(const std::string& value)
     throw std::runtime_error("invalid serial speed: " + value);
 }
 
+PlayerProfileCli parsePlayerProfile(const std::string& value)
+{
+    auto text = lower(trim(value));
+    if (text == "auto") return PlayerProfileCli::Auto;
+    if (text == "generic-level3" || text == "generic-level-3" || text == "generic") return PlayerProfileCli::GenericLevel3;
+    if (text == "pioneer-ld-v4300d" || text == "ld-v4300d" || text == "ldv4300d") return PlayerProfileCli::PioneerLdV4300D;
+    if (text == "pioneer-ld-v2200" || text == "ld-v2200" || text == "ldv2200") return PlayerProfileCli::PioneerLdV2200;
+    throw std::runtime_error("invalid player profile: " + value);
+}
+
 DiscTypeCli parseDiscType(const std::string& value)
 {
     auto text = lower(trim(value));
@@ -101,6 +112,19 @@ uint16_t parseU16(const std::string& value)
 {
     int base = lower(value).starts_with("0x") ? 16 : 10;
     return (uint16_t)std::stoul(value, nullptr, base);
+}
+
+void applyAddressFields(CliOptions& options)
+{
+    if (options.discType != DiscTypeCli::Clv)
+    {
+        if (!options.startAddressText.empty()) options.startAddress = std::stoi(options.startAddressText);
+        if (!options.endAddressText.empty()) options.endAddress = std::stoi(options.endAddressText);
+        return;
+    }
+
+    if (!options.startAddressText.empty()) options.startAddress = parseClvAddressSeconds(options.startAddressText);
+    if (!options.endAddressText.empty()) options.endAddress = parseClvAddressSeconds(options.endAddressText);
 }
 
 std::string requireValue(int& index, int argc, char* argv[], const std::string& option)
@@ -127,10 +151,11 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     else if (key == "capture.duration_seconds") options.durationSeconds = std::stoi(stripQuotes(value));
     else if (key == "player.serial_device") options.serialDevice = stripQuotes(value);
     else if (key == "player.serial_speed") options.serialSpeed = parseSerialSpeed(stripQuotes(value));
+    else if (key == "player.profile") options.playerProfile = parsePlayerProfile(stripQuotes(value));
     else if (key == "auto_capture.disc_type") options.discType = parseDiscType(stripQuotes(value));
     else if (key == "auto_capture.mode") options.autoCaptureMode = parseAutoCaptureMode(stripQuotes(value));
-    else if (key == "auto_capture.start_address") options.startAddress = std::stoi(stripQuotes(value));
-    else if (key == "auto_capture.end_address") options.endAddress = std::stoi(stripQuotes(value));
+    else if (key == "auto_capture.start_address") options.startAddressText = stripQuotes(value);
+    else if (key == "auto_capture.end_address") options.endAddressText = stripQuotes(value);
     else if (key == "auto_capture.key_lock") options.keyLock = parseBool(value);
 }
 }
@@ -199,6 +224,7 @@ void TomlConfig::applyTo(CliOptions& options) const
     {
         applyKeyValue(options, key, value);
     }
+    applyAddressFields(options);
 }
 
 ParsedCommandLine parseCommandLine(int argc, char* argv[])
@@ -234,6 +260,11 @@ ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& bas
     {
         parsed.playerAction = argv[2];
         startIndex = 3;
+        if (parsed.playerAction == "raw-command" && argc > 3)
+        {
+            parsed.playerRawCommand = argv[3];
+            startIndex = 4;
+        }
     }
 
     for (int i = startIndex; i < argc; ++i)
@@ -259,13 +290,15 @@ ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& bas
         else if (arg == "--duration") parsed.options.durationSeconds = std::stoi(requireValue(i, argc, argv, arg));
         else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(i, argc, argv, arg);
         else if (arg == "--serial-speed") parsed.options.serialSpeed = parseSerialSpeed(requireValue(i, argc, argv, arg));
+        else if (arg == "--player-profile") parsed.options.playerProfile = parsePlayerProfile(requireValue(i, argc, argv, arg));
         else if (arg == "--disc-type") parsed.options.discType = parseDiscType(requireValue(i, argc, argv, arg));
         else if (arg == "--mode") parsed.options.autoCaptureMode = parseAutoCaptureMode(requireValue(i, argc, argv, arg));
-        else if (arg == "--start-address") parsed.options.startAddress = std::stoi(requireValue(i, argc, argv, arg));
-        else if (arg == "--end-address") parsed.options.endAddress = std::stoi(requireValue(i, argc, argv, arg));
+        else if (arg == "--start-address") parsed.options.startAddressText = requireValue(i, argc, argv, arg);
+        else if (arg == "--end-address") parsed.options.endAddressText = requireValue(i, argc, argv, arg);
         else if (arg == "--key-lock") parsed.options.keyLock = true;
         else throw std::runtime_error("unknown option: " + arg);
     }
+    applyAddressFields(parsed.options);
     return parsed;
 }
 
@@ -278,6 +311,97 @@ std::string captureFormatExtension(CaptureFormatCli format)
     case CaptureFormatCli::Cds: return ".cds";
     }
     return ".lds";
+}
+
+int parseClvAddressSeconds(const std::string& value)
+{
+    auto text = trim(value);
+    if (text.empty())
+    {
+        throw std::runtime_error("invalid CLV address: empty value");
+    }
+    if (!std::all_of(text.begin(), text.end(), [](unsigned char ch) { return std::isdigit(ch); }))
+    {
+        throw std::runtime_error("invalid CLV address: " + value);
+    }
+
+    int raw = std::stoi(text);
+    if (text.size() < 5)
+    {
+        return raw;
+    }
+    if (text.size() == 5 || text.size() == 7)
+    {
+        int hours = std::stoi(text.substr(0, 1));
+        int minutes = std::stoi(text.substr(1, 2));
+        int seconds = std::stoi(text.substr(3, 2));
+        if (minutes >= 60 || seconds >= 60)
+        {
+            throw std::runtime_error("invalid CLV time code: " + value);
+        }
+        return (hours * 60 * 60) + (minutes * 60) + seconds;
+    }
+
+    return raw;
+}
+
+bool shouldStopAutoCaptureAtAddress(
+    DiscTypeCli discType,
+    int address,
+    int endAddress,
+    const std::chrono::steady_clock::time_point& now,
+    AutoCaptureStopState& state)
+{
+    if (discType != DiscTypeCli::Clv)
+    {
+        return address >= endAddress;
+    }
+
+    if (address > endAddress)
+    {
+        return true;
+    }
+    if (address < endAddress)
+    {
+        state.clvPostRollStarted = false;
+        return false;
+    }
+    if (!state.clvPostRollStarted)
+    {
+        state.clvPostRollStarted = true;
+        state.clvPostRollStart = now;
+        return false;
+    }
+
+    constexpr auto clvEndAddressPostRoll = std::chrono::milliseconds(1500);
+    return now - state.clvPostRollStart >= clvEndAddressPostRoll;
+}
+
+bool shouldStopAutoCaptureForPlayerState(
+    DiscTypeCli discType,
+    const AutoCaptureStopState& state,
+    PlayerStateCli playerState)
+{
+    if (discType != DiscTypeCli::Clv || !state.clvPostRollStarted)
+    {
+        return false;
+    }
+
+    return playerState == PlayerStateCli::Stop ||
+        playerState == PlayerStateCli::Pause ||
+        playerState == PlayerStateCli::StillFrame;
+}
+
+std::string playerProfileToString(PlayerProfileCli profile)
+{
+    switch (profile)
+    {
+    case PlayerProfileCli::Auto: return "auto";
+    case PlayerProfileCli::GenericLevel3: return "generic-level3";
+    case PlayerProfileCli::PioneerLdV4300D: return "pioneer-ld-v4300d";
+    case PlayerProfileCli::PioneerLdV2200: return "pioneer-ld-v2200";
+    }
+    return "auto";
 }
 
 std::filesystem::path buildOutputPath(const CliOptions& options)
@@ -344,7 +468,7 @@ void printUsage()
         "  list-devices\n"
         "  capture\n"
         "  auto-capture\n"
-        "  player status|play|pause|stop|still|read-user-codes\n"
+        "  player status|play|pause|stop|still|read-user-codes|raw-command <command>\n"
         "\n"
         "Common options:\n"
         "  --config <file>                  TOML config path\n"
@@ -364,6 +488,7 @@ void printUsage()
         "Player/automatic options:\n"
         "  --serial-device <path>           serial device, e.g. /dev/ttyUSB0\n"
         "  --serial-speed auto|9600|4800|2400|1200\n"
+        "  --player-profile auto|generic-level3|pioneer-ld-v4300d|pioneer-ld-v2200\n"
         "  --disc-type cav|clv              required for auto-capture\n"
         "  --mode whole-disc|lead-in|partial\n"
         "  --start-address <n> --end-address <n>\n"

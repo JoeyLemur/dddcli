@@ -162,13 +162,14 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
 bool connectPlayer(PlayerSerial& player, const CliOptions& options)
 {
     std::string error;
-    if (!player.connect(options.serialDevice, options.serialSpeed, error))
+    if (!player.connect(options.serialDevice, options.serialSpeed, options.playerProfile, error))
     {
         std::cerr << "Failed to connect to player: " << error << "\n";
         return false;
     }
     std::cerr << "Connected to " << player.modelName() << " version " << player.versionNumber()
-              << " @ " << serialSpeedToString(player.detectedSpeed()) << " bps\n";
+              << " @ " << serialSpeedToString(player.detectedSpeed()) << " bps"
+              << " using " << playerProfileToString(player.activeProfile()) << " profile\n";
     return true;
 }
 
@@ -184,6 +185,7 @@ int runPlayer(const ParsedCommandLine& parsed)
     if (action == "status")
     {
         std::cout << "model=" << player.modelName() << "\n";
+        std::cout << "playerProfile=" << playerProfileToString(player.activeProfile()) << "\n";
         std::cout << "state=" << playerStateToString(player.getPlayerState()) << "\n";
         std::cout << "discType=" << discTypeToString(player.getDiscType()) << "\n";
         std::cout << "discStatus=" << player.getDiscStatus() << "\n";
@@ -196,6 +198,15 @@ int runPlayer(const ParsedCommandLine& parsed)
     {
         std::cout << "standardUserCode=" << player.getStandardUserCode() << "\n";
         std::cout << "pioneerUserCode=" << player.getPioneerUserCode() << "\n";
+    }
+    else if (action == "raw-command")
+    {
+        if (parsed.playerRawCommand.empty())
+        {
+            std::cerr << "raw-command requires a command string\n";
+            return 1;
+        }
+        std::cout << escapedSerialResponse(player.rawCommand(parsed.playerRawCommand)) << "\n";
     }
     else
     {
@@ -319,7 +330,8 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     }
     else
     {
-        if (!player.setPositionTimeCode(1595900))
+        constexpr int latestClvAddressToProbeSeconds = (1 * 60 * 60) + (59 * 60) + 59;
+        if (!player.setPositionTimeCode(latestClvAddressToProbeSeconds))
         {
             std::cerr << "Could not determine CLV disc length\n";
             cleanup();
@@ -383,9 +395,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     constexpr int maxConsecutiveAddressReadFailures = 3;
     bool autoCaptureError = false;
     std::string autoCaptureErrorMessage;
+    AutoCaptureStopState stopState;
     auto start = std::chrono::steady_clock::now();
     while (!stopRequested && usb.GetTransferInProgress())
     {
+        auto now = std::chrono::steady_clock::now();
         if (options.discType == DiscTypeCli::Cav && player.getPlayerState() == PlayerStateCli::StillFrame)
         {
             player.setPlayerState(PlayerStateCli::Play);
@@ -396,9 +410,22 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         {
             consecutiveAddressReadFailures = 0;
             recordAutoAddress(metadata, options.discType, address);
-            if (address >= endAddress)
+            if (shouldStopAutoCaptureAtAddress(options.discType, address, endAddress, now, stopState))
             {
                 break;
+            }
+            if (stopState.clvPostRollStarted)
+            {
+                auto playerState = player.getPlayerState();
+                if (shouldStopAutoCaptureForPlayerState(options.discType, stopState, playerState))
+                {
+                    if (!options.quiet)
+                    {
+                        std::cerr << "CLV post-roll ended because player state is "
+                                  << playerStateToString(playerState) << "\n";
+                    }
+                    break;
+                }
             }
             if (lastAddress >= 0 && (lastAddress - 1000) > address)
             {

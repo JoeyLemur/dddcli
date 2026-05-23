@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cstring>
+#include <cctype>
 #include <fcntl.h>
 #include <iomanip>
 #include <poll.h>
@@ -17,6 +18,89 @@ namespace
 {
 constexpr int NormalTimeoutMs = 5 * 1000;
 constexpr int LongTimeoutMs = 30 * 1000;
+
+struct PlayerCommandProfile
+{
+    PlayerProfileCli id;
+    const char* frameRequest;
+    const char* timeCodeRequest;
+    const char* playerStateRequest;
+    const char* discStatusRequest;
+    const char* standardUserCodeRequest;
+    const char* pioneerUserCodeRequest;
+    const char* play;
+    const char* playWithStopCodesDisabled;
+    const char* pause;
+    const char* still;
+    const char* stop;
+    const char* keyLock;
+    const char* keyUnlock;
+    int timeCodeAddressDigits;
+};
+
+const PlayerCommandProfile& commandProfile(PlayerProfileCli profile)
+{
+    static const PlayerCommandProfile generic {
+        PlayerProfileCli::GenericLevel3,
+        "?F\r",
+        "?T\r",
+        "?P\r",
+        "?D\r",
+        "$Y\r",
+        "?U\r",
+        "PL\r",
+        "PL64RBMF\r",
+        "PA\r",
+        "ST\r",
+        "RJ\r",
+        "1KL\r",
+        "0KL\r",
+        7,
+    };
+    static const PlayerCommandProfile ldv4300d = {
+        PlayerProfileCli::PioneerLdV4300D,
+        "?F\r",
+        "?T\r",
+        "?P\r",
+        "?D\r",
+        "$Y\r",
+        "?U\r",
+        "PL\r",
+        "PL64RBMF\r",
+        "PA\r",
+        "ST\r",
+        "RJ\r",
+        "1KL\r",
+        "0KL\r",
+        7,
+    };
+    static const PlayerCommandProfile ldv2200 = {
+        PlayerProfileCli::PioneerLdV2200,
+        "?F\r",
+        "?T\r",
+        "?P\r",
+        "?D\r",
+        "$Y\r",
+        "?U\r",
+        "PL\r",
+        "PL64RBMF\r",
+        "PA\r",
+        "ST\r",
+        "RJ\r",
+        "1KL\r",
+        "0KL\r",
+        5,
+    };
+
+    switch (profile)
+    {
+    case PlayerProfileCli::PioneerLdV4300D: return ldv4300d;
+    case PlayerProfileCli::PioneerLdV2200: return ldv2200;
+    case PlayerProfileCli::Auto:
+    case PlayerProfileCli::GenericLevel3: return generic;
+    }
+    return generic;
+}
 
 speed_t toNativeSpeed(SerialSpeedCli speed)
 {
@@ -62,7 +146,7 @@ PlayerSerial::~PlayerSerial()
     disconnect();
 }
 
-bool PlayerSerial::connect(const std::string& serialDevice, SerialSpeedCli speed, std::string& error)
+bool PlayerSerial::connect(const std::string& serialDevice, SerialSpeedCli speed, PlayerProfileCli requestedProfile, std::string& error)
 {
     disconnect();
     if (serialDevice.empty())
@@ -90,6 +174,7 @@ bool PlayerSerial::connect(const std::string& serialDevice, SerialSpeedCli speed
                 currentVersionNumber = response.substr(5, 2);
                 currentModelName = playerCodeToName(playerCode);
                 currentSpeed = candidateSpeed;
+                currentProfile = playerProfileForModelCode(playerCode, requestedProfile);
                 physicalPositionSupported = playerCode == "06" && currentVersionNumber == "A9";
                 return true;
             }
@@ -112,6 +197,7 @@ void PlayerSerial::disconnect()
     currentVersionNumber.clear();
     physicalPositionSupported = false;
     currentSpeed = SerialSpeedCli::Auto;
+    currentProfile = PlayerProfileCli::GenericLevel3;
 }
 
 bool PlayerSerial::connected() const
@@ -123,11 +209,12 @@ std::string PlayerSerial::modelCode() const { return currentModelCode; }
 std::string PlayerSerial::modelName() const { return currentModelName; }
 std::string PlayerSerial::versionNumber() const { return currentVersionNumber; }
 SerialSpeedCli PlayerSerial::detectedSpeed() const { return currentSpeed; }
+PlayerProfileCli PlayerSerial::activeProfile() const { return currentProfile; }
 bool PlayerSerial::supportsPhysicalPosition() const { return physicalPositionSupported; }
 
 PlayerStateCli PlayerSerial::getPlayerState()
 {
-    auto response = commandResponse("?P\r", NormalTimeoutMs);
+    auto response = commandResponse(commandProfile(currentProfile).playerStateRequest, NormalTimeoutMs);
     if (response.find("P00") != std::string::npos) return PlayerStateCli::Stop;
     if (response.find("P01") != std::string::npos) return PlayerStateCli::Stop;
     if (response.find("P02") != std::string::npos) return PlayerStateCli::Play;
@@ -144,7 +231,7 @@ PlayerStateCli PlayerSerial::getPlayerState()
 
 DiscTypeCli PlayerSerial::getDiscType()
 {
-    auto response = commandResponse("?D\r", NormalTimeoutMs);
+    auto response = commandResponse(commandProfile(currentProfile).discStatusRequest, NormalTimeoutMs);
     if (response.size() >= 2)
     {
         if (response[1] == '0') return DiscTypeCli::Cav;
@@ -155,59 +242,27 @@ DiscTypeCli PlayerSerial::getDiscType()
 
 std::string PlayerSerial::getDiscStatus()
 {
-    return stripTrailingCr(commandResponse("?D\r", NormalTimeoutMs));
+    return stripTrailingCr(commandResponse(commandProfile(currentProfile).discStatusRequest, NormalTimeoutMs));
 }
 
 std::string PlayerSerial::getStandardUserCode()
 {
-    return stripTrailingCr(commandResponse("$Y\r", NormalTimeoutMs));
+    return stripTrailingCr(commandResponse(commandProfile(currentProfile).standardUserCodeRequest, NormalTimeoutMs));
 }
 
 std::string PlayerSerial::getPioneerUserCode()
 {
-    return stripTrailingCr(commandResponse("?U\r", NormalTimeoutMs));
+    return stripTrailingCr(commandResponse(commandProfile(currentProfile).pioneerUserCodeRequest, NormalTimeoutMs));
 }
 
 AddressResult PlayerSerial::getCurrentFrame()
 {
-    auto response = commandResponse("?F\r", NormalTimeoutMs);
-    AddressResult result;
-    if (response.starts_with("<"))
-    {
-        result.inLeadIn = true;
-        response.erase(response.begin());
-    }
-    else if (response.starts_with(">"))
-    {
-        result.inLeadOut = true;
-        response.erase(response.begin());
-    }
-    if (!response.empty())
-    {
-        result.address = std::stoi(response.substr(0, std::min<size_t>(5, response.size())));
-    }
-    return result;
+    return parsePlayerFrameResponse(commandResponse(commandProfile(currentProfile).frameRequest, NormalTimeoutMs));
 }
 
 AddressResult PlayerSerial::getCurrentTimeCode()
 {
-    auto response = commandResponse("?F\r", NormalTimeoutMs);
-    AddressResult result;
-    if (response.starts_with("<"))
-    {
-        result.inLeadIn = true;
-        response.erase(response.begin());
-    }
-    else if (response.starts_with(">"))
-    {
-        result.inLeadOut = true;
-        response.erase(response.begin());
-    }
-    if (!response.empty())
-    {
-        result.address = std::stoi(response.substr(0, std::min<size_t>(7, response.size())));
-    }
-    return result;
+    return parsePlayerTimeCodeResponse(commandResponse(commandProfile(currentProfile).timeCodeRequest, NormalTimeoutMs));
 }
 
 float PlayerSerial::getPhysicalPosition()
@@ -225,13 +280,14 @@ float PlayerSerial::getPhysicalPosition()
 bool PlayerSerial::setPlayerState(PlayerStateCli state)
 {
     std::string response;
+    const auto& profile = commandProfile(currentProfile);
     switch (state)
     {
-    case PlayerStateCli::Pause: response = commandResponse("PA\r", NormalTimeoutMs); break;
-    case PlayerStateCli::Play: response = commandResponse("PL\r", LongTimeoutMs); break;
-    case PlayerStateCli::PlayWithStopCodesDisabled: response = commandResponse("PL64RBMF\r", LongTimeoutMs); break;
-    case PlayerStateCli::StillFrame: response = commandResponse("ST\r", NormalTimeoutMs); break;
-    case PlayerStateCli::Stop: response = commandResponse("RJ\r", LongTimeoutMs); break;
+    case PlayerStateCli::Pause: response = commandResponse(profile.pause, NormalTimeoutMs); break;
+    case PlayerStateCli::Play: response = commandResponse(profile.play, LongTimeoutMs); break;
+    case PlayerStateCli::PlayWithStopCodesDisabled: response = commandResponse(profile.playWithStopCodesDisabled, LongTimeoutMs); break;
+    case PlayerStateCli::StillFrame: response = commandResponse(profile.still, NormalTimeoutMs); break;
+    case PlayerStateCli::Stop: response = commandResponse(profile.stop, LongTimeoutMs); break;
     case PlayerStateCli::Unknown: return false;
     }
     return responseOk(response);
@@ -239,7 +295,8 @@ bool PlayerSerial::setPlayerState(PlayerStateCli state)
 
 bool PlayerSerial::setKeyLock(bool locked)
 {
-    return responseOk(commandResponse(locked ? "1KL\r" : "0KL\r", NormalTimeoutMs));
+    const auto& profile = commandProfile(currentProfile);
+    return responseOk(commandResponse(locked ? profile.keyLock : profile.keyUnlock, NormalTimeoutMs));
 }
 
 bool PlayerSerial::setPositionFrame(int address)
@@ -249,7 +306,32 @@ bool PlayerSerial::setPositionFrame(int address)
 
 bool PlayerSerial::setPositionTimeCode(int address)
 {
-    return responseOk(commandResponse("FR" + std::to_string(address) + "SE\r", LongTimeoutMs));
+    const auto& profile = commandProfile(currentProfile);
+    int hours = address / 3600;
+    int minutes = (address / 60) % 60;
+    int seconds = address % 60;
+
+    std::ostringstream timeCode;
+    if (profile.timeCodeAddressDigits == 5)
+    {
+        timeCode << hours << std::setw(2) << std::setfill('0') << minutes
+                 << std::setw(2) << std::setfill('0') << seconds;
+    }
+    else
+    {
+        timeCode << hours << std::setw(2) << std::setfill('0') << minutes
+                 << std::setw(2) << std::setfill('0') << seconds << "00";
+    }
+    return responseOk(commandResponse("FR" + timeCode.str() + "SE\r", LongTimeoutMs));
+}
+
+std::string PlayerSerial::rawCommand(std::string command, int expectedResponseCount)
+{
+    if (!command.ends_with('\r'))
+    {
+        command.push_back('\r');
+    }
+    return commandResponse(command, LongTimeoutMs, expectedResponseCount);
 }
 
 bool PlayerSerial::tryOpen(const std::string& serialDevice, SerialSpeedCli speed, std::string& error)
@@ -367,6 +449,92 @@ std::string PlayerSerial::playerCodeToName(const std::string& playerCode) const
     if (playerCode == "05") return "Pioneer VC-V330";
     if (playerCode == "02") return "Pioneer LD-V4200";
     return "Unknown Player [" + playerCode + "]";
+}
+
+PlayerProfileCli playerProfileForModelCode(const std::string& playerCode, PlayerProfileCli requestedProfile)
+{
+    if (requestedProfile != PlayerProfileCli::Auto)
+    {
+        return requestedProfile;
+    }
+    if (playerCode == "15") return PlayerProfileCli::PioneerLdV4300D;
+    if (playerCode == "07") return PlayerProfileCli::PioneerLdV2200;
+    return PlayerProfileCli::GenericLevel3;
+}
+
+AddressResult parsePlayerFrameResponse(std::string response)
+{
+    response = stripTrailingCr(response);
+    AddressResult result;
+    if (response.starts_with("<"))
+    {
+        result.inLeadIn = true;
+        response.erase(response.begin());
+    }
+    else if (response.starts_with(">"))
+    {
+        result.inLeadOut = true;
+        response.erase(response.begin());
+    }
+    if (!response.empty())
+    {
+        result.address = std::stoi(response.substr(0, std::min<size_t>(5, response.size())));
+    }
+    return result;
+}
+
+AddressResult parsePlayerTimeCodeResponse(std::string response)
+{
+    response = stripTrailingCr(response);
+    AddressResult result;
+    if (response.starts_with("<"))
+    {
+        result.inLeadIn = true;
+        response.erase(response.begin());
+    }
+    else if (response.starts_with(">"))
+    {
+        result.inLeadOut = true;
+        response.erase(response.begin());
+    }
+    if (!response.empty())
+    {
+        result.address = parseClvAddressSeconds(response);
+    }
+    return result;
+}
+
+std::string escapedSerialResponse(const std::string& response)
+{
+    std::ostringstream out;
+    for (unsigned char ch : response)
+    {
+        if (ch == '\r')
+        {
+            out << "\\r";
+        }
+        else if (ch == '\n')
+        {
+            out << "\\n";
+        }
+        else if (ch == '\t')
+        {
+            out << "\\t";
+        }
+        else if (ch == '\\')
+        {
+            out << "\\\\";
+        }
+        else if (std::isprint(ch))
+        {
+            out << (char)ch;
+        }
+        else
+        {
+            out << "\\x" << std::hex << std::setw(2) << std::setfill('0') << (unsigned int)ch << std::dec;
+        }
+    }
+    return out.str();
 }
 
 std::string playerStateToString(PlayerStateCli state)

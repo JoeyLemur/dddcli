@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UsbDeviceBase.h"
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -23,6 +24,14 @@ enum class SerialSpeedCli
     Bps1200,
 };
 
+enum class PlayerProfileCli
+{
+    Auto,
+    GenericLevel3,
+    PioneerLdV4300D,
+    PioneerLdV2200,
+};
+
 enum class DiscTypeCli
 {
     Unknown,
@@ -35,6 +44,16 @@ enum class AutoCaptureModeCli
     WholeDisc,
     LeadIn,
     Partial,
+};
+
+enum class PlayerStateCli
+{
+    Unknown,
+    Stop,
+    Play,
+    PlayWithStopCodesDisabled,
+    Pause,
+    StillFrame,
 };
 
 struct CliOptions
@@ -60,10 +79,13 @@ struct CliOptions
 
     std::string serialDevice;
     SerialSpeedCli serialSpeed = SerialSpeedCli::Auto;
+    PlayerProfileCli playerProfile = PlayerProfileCli::Auto;
     DiscTypeCli discType = DiscTypeCli::Unknown;
     AutoCaptureModeCli autoCaptureMode = AutoCaptureModeCli::WholeDisc;
     int startAddress = 0;
     int endAddress = 0;
+    std::string startAddressText;
+    std::string endAddressText;
     bool keyLock = false;
 };
 
@@ -71,7 +93,14 @@ struct ParsedCommandLine
 {
     std::string command;
     std::string playerAction;
+    std::string playerRawCommand;
     CliOptions options;
+};
+
+struct AutoCaptureStopState
+{
+    bool clvPostRollStarted = false;
+    std::chrono::steady_clock::time_point clvPostRollStart{};
 };
 
 class TomlConfig
@@ -90,5 +119,17 @@ ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& bas
 std::filesystem::path buildOutputPath(const CliOptions& options);
 UsbDeviceBase::CaptureFormat toUsbCaptureFormat(CaptureFormatCli format);
 std::string captureFormatExtension(CaptureFormatCli format);
+int parseClvAddressSeconds(const std::string& value);
+bool shouldStopAutoCaptureAtAddress(
+    DiscTypeCli discType,
+    int address,
+    int endAddress,
+    const std::chrono::steady_clock::time_point& now,
+    AutoCaptureStopState& state);
+bool shouldStopAutoCaptureForPlayerState(
+    DiscTypeCli discType,
+    const AutoCaptureStopState& state,
+    PlayerStateCli playerState);
+std::string playerProfileToString(PlayerProfileCli profile);
 std::string transferResultToString(UsbDeviceBase::TransferResult result);
 void printUsage();

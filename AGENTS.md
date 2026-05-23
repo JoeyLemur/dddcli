@@ -12,9 +12,8 @@ Guidance for agents working in this repository.
 - `src/CaptureMetadata.*`: JSON sidecar metadata generation for captures.
 - `src/ConsoleLogger.*`: adapter from the GUI USB logger interface to stderr.
 - `tests/CliConfigTests.cpp`: assertion-based tests for config, parsing, and output format helpers.
-- `orig/`: reference copy of the original GUI code. Use it to understand behavior that was ported from Qt dialogs/controllers, especially USB capture, configuration, naming, player communication, and automatic capture logic.
 
-The CLI links against USB capture code from the GUI project. `CMakeLists.txt` currently expects a sibling checkout at `../DomesdayDuplicator` and uses the GUI USB classes (`UsbDeviceBase`, `UsbDeviceLibUsb`, `ILogger`). The `orig/` directory also contains reference copies of those classes, but the build file is the source of truth for what is compiled.
+The CLI links against USB capture code from the GUI project. `CMakeLists.txt` expects the sibling checkout at `../DomesdayDuplicator/gui-app/tools/DomesdayDuplicator` and uses the GUI USB classes (`UsbDeviceBase`, `UsbDeviceLibUsb`, `ILogger`). The build file is the source of truth for what is compiled.
 
 ## Commands and Behavior
 
@@ -23,7 +22,7 @@ Supported commands are:
 - `dddcli list-devices`
 - `dddcli capture`
 - `dddcli auto-capture`
-- `dddcli player status|play|pause|stop|still|read-user-codes`
+- `dddcli player status|play|pause|stop|still|read-user-codes|raw-command <command>`
 
 Config defaults come from `$XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml`, then `$HOME/.config/domesday-duplicator/dddcli.toml`, then `dddcli.toml`. CLI flags override config values because `main()` loads config into a base `CliOptions` and reparses argv over it.
 
@@ -40,6 +39,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 If configuration fails, first verify libusb development files and the sibling Domesday Duplicator source/module paths. Tests currently exercise CLI/config code and should not require connected USB or serial hardware.
+
+For real device validation, follow `HARDWARE_TESTS.md`.
 
 ## Hardware-Sensitive Areas
 
@@ -67,9 +68,10 @@ When changing these flows, preserve the cleanup behavior in `runAutoCapture()` a
 - `--output` without an extension gains the selected capture format extension.
 - `--quiet` suppresses non-error logging and progress, but completion/error reporting is still important.
 - Serial speed `auto` probes `9600`, `4800`, `2400`, then `1200`.
-- CAV auto-capture uses frame addresses; CLV auto-capture uses time-code addresses.
+- Player command profile `auto` maps known model codes to profiles; use `--player-profile` to force `generic-level3`, `pioneer-ld-v4300d`, or `pioneer-ld-v2200`.
+- CAV auto-capture uses frame addresses; CLV auto-capture normalizes time-code addresses to elapsed seconds internally.
 - `AutoCaptureModeCli::Partial` requires `--end-address`.
 
 ## Git/Workspace Notes
 
-Treat `orig/` as reference material unless the user explicitly asks to update the porting baseline. Prefer implementing CLI changes under `src/`, `tests/`, and build files. This repository may also sit next to the original GUI checkout; treat sibling files as dependencies, not owned source, unless the user explicitly asks to modify them. Do not revert unrelated worktree changes.
+This repository may sit next to the original GUI checkout; treat sibling files as dependencies, not owned source, unless the user explicitly asks to modify them. Prefer implementing CLI changes under `src/`, `tests/`, and build files. Do not revert unrelated worktree changes.
