@@ -23,6 +23,20 @@ void assertParseThrows(const char* const* argv, int argc)
     }
     assert(threw);
 }
+
+void assertParseThrows(const char* const* argv, int argc, const CliOptions& base)
+{
+    bool threw = false;
+    try
+    {
+        parseCommandLine(argc, const_cast<char**>(argv), base);
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    assert(threw);
+}
 }
 
 int main()
@@ -155,6 +169,86 @@ int main()
     assert(profileParsed.options.playerProfile == PlayerProfileCli::PioneerLdV2200);
     assert(profileParsed.options.startAddress == 754);
     assert(profileParsed.options.endAddress == 754);
+
+    const char* validPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "--start-address",
+        "1300",
+        "--end-address",
+        "1301",
+    };
+    CliOptions validationBase;
+    auto validPartialParsed = parseCommandLine(10, const_cast<char**>(validPartialArgv), validationBase);
+    assert(validPartialParsed.options.startAddress == 1300);
+    assert(validPartialParsed.options.endAddress == 1301);
+
+    const char* preliminaryPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--mode",
+        "partial",
+    };
+    auto preliminaryPartialParsed = parseCommandLine(4, const_cast<char**>(preliminaryPartialArgv));
+    assert(preliminaryPartialParsed.command == "auto-capture");
+    assert(preliminaryPartialParsed.options.autoCaptureMode == AutoCaptureModeCli::Partial);
+
+    const char* equalCavPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "--start-address",
+        "1300",
+        "--end-address",
+        "1300",
+    };
+    assertParseThrows(equalCavPartialArgv, 10, validationBase);
+
+    const char* reversedCavPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "--start-address",
+        "1301",
+        "--end-address",
+        "1300",
+    };
+    assertParseThrows(reversedCavPartialArgv, 10, validationBase);
+
+    const char* equalClvPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "clv",
+        "--mode",
+        "partial",
+        "--start-address",
+        "01234",
+        "--end-address",
+        "0123400",
+    };
+    assertParseThrows(equalClvPartialArgv, 10, validationBase);
+
+    CliOptions invalidConfiguredPartial;
+    invalidConfiguredPartial.discType = DiscTypeCli::Cav;
+    invalidConfiguredPartial.autoCaptureMode = AutoCaptureModeCli::Partial;
+    invalidConfiguredPartial.startAddress = 1300;
+    invalidConfiguredPartial.endAddress = 1300;
+    const char* configuredPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+    };
+    assertParseThrows(configuredPartialArgv, 2, invalidConfiguredPartial);
 
     const char* rawArgv[] = {
         "dddcli",

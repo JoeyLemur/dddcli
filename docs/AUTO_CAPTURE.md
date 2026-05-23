@@ -8,7 +8,7 @@
 - `lead-in`: capture from spin-down/lead-in to the requested or detected end address.
 - `partial`: seek to `--start-address` and capture until `--end-address`.
 
-`partial` requires `--end-address`.
+`partial` requires `--end-address`, and the normalized end address must be greater than the start address.
 
 ## Disc Type
 
@@ -76,7 +76,9 @@ CLV metadata values are normalized seconds, not raw compact `HMMSS` or `HMMSSFF`
 The auto-capture path is designed to clean up on success, capture errors, and interruption:
 
 - USB transfer is stopped if still running.
-- key lock is released if it was enabled.
+- key lock is released if it was enabled. If requested key lock cannot be enabled, capture aborts before USB capture starts.
 - CAV captures end by stopping the player.
 - CLV captures end by pausing the player.
 - auto-capture address errors leave the player in still-frame for inspection.
+
+If the final player cleanup command or key-lock release fails after capture, the CLI reports the failure and exits non-zero.

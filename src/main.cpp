@@ -88,7 +88,10 @@ private:
         }
         if (keyLocked)
         {
-            player.setKeyLock(false);
+            if (!player.setKeyLock(false))
+            {
+                std::cerr << "Failed to release player key lock during cleanup\n";
+            }
             keyLocked = false;
         }
     }
@@ -215,6 +218,16 @@ bool connectPlayer(PlayerSerial& player, const CliOptions& options)
     return true;
 }
 
+int runPlayerTransportAction(PlayerSerial& player, const std::string& action, PlayerStateCli state)
+{
+    if (!player.setPlayerState(state))
+    {
+        std::cerr << "Failed to " << action << " player\n";
+        return 1;
+    }
+    return 0;
+}
+
 int runPlayer(const ParsedCommandLine& parsed)
 {
     PlayerSerial player;
@@ -232,10 +245,10 @@ int runPlayer(const ParsedCommandLine& parsed)
         std::cout << "discType=" << discTypeToString(player.getDiscType()) << "\n";
         std::cout << "discStatus=" << player.getDiscStatus() << "\n";
     }
-    else if (action == "play") player.setPlayerState(PlayerStateCli::Play);
-    else if (action == "pause") player.setPlayerState(PlayerStateCli::Pause);
-    else if (action == "stop") player.setPlayerState(PlayerStateCli::Stop);
-    else if (action == "still") player.setPlayerState(PlayerStateCli::StillFrame);
+    else if (action == "play") return runPlayerTransportAction(player, action, PlayerStateCli::Play);
+    else if (action == "pause") return runPlayerTransportAction(player, action, PlayerStateCli::Pause);
+    else if (action == "stop") return runPlayerTransportAction(player, action, PlayerStateCli::Stop);
+    else if (action == "still") return runPlayerTransportAction(player, action, PlayerStateCli::StillFrame);
     else if (action == "read-user-codes")
     {
         std::cout << "standardUserCode=" << player.getStandardUserCode() << "\n";
@@ -293,6 +306,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         std::cerr << "partial auto-capture requires --end-address\n";
         return 1;
     }
+    if (options.autoCaptureMode == AutoCaptureModeCli::Partial && options.endAddress <= options.startAddress)
+    {
+        std::cerr << "partial auto-capture requires --end-address greater than --start-address\n";
+        return 1;
+    }
     if (!initializeUsb(usb, options))
     {
         std::cerr << "Failed to initialize USB backend\n";
@@ -321,7 +339,12 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
 
     if (options.keyLock)
     {
-        keyLocked = player.setKeyLock(true);
+        if (!player.setKeyLock(true))
+        {
+            std::cerr << "Could not enable player key lock\n";
+            return 1;
+        }
+        keyLocked = true;
     }
 
     PlayerStateCli state = player.getPlayerState();
@@ -493,15 +516,38 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     int captureResult = finishCapture(usb);
     metadata.duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
     captureStarted = false;
+    bool cleanupFailed = false;
     if (autoCaptureError)
     {
-        player.setPlayerState(PlayerStateCli::StillFrame);
+        if (!player.setPlayerState(PlayerStateCli::StillFrame))
+        {
+            std::cerr << "Failed to set player to still-frame during cleanup\n";
+            cleanupFailed = true;
+        }
     }
-    else if (options.discType == DiscTypeCli::Cav) player.setPlayerState(PlayerStateCli::Stop);
-    else player.setPlayerState(PlayerStateCli::Pause);
+    else if (options.discType == DiscTypeCli::Cav)
+    {
+        if (!player.setPlayerState(PlayerStateCli::Stop))
+        {
+            std::cerr << "Failed to stop player during cleanup\n";
+            cleanupFailed = true;
+        }
+    }
+    else
+    {
+        if (!player.setPlayerState(PlayerStateCli::Pause))
+        {
+            std::cerr << "Failed to pause player during cleanup\n";
+            cleanupFailed = true;
+        }
+    }
     if (keyLocked)
     {
-        player.setKeyLock(false);
+        if (!player.setKeyLock(false))
+        {
+            std::cerr << "Failed to release player key lock during cleanup\n";
+            cleanupFailed = true;
+        }
         keyLocked = false;
     }
     cleanupGuard.disarm();
@@ -510,7 +556,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     {
         return 1;
     }
-    return captureResult;
+    if (captureResult != 0)
+    {
+        return captureResult;
+    }
+    return cleanupFailed ? 1 : 0;
 }
 }
 

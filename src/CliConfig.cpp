@@ -183,6 +183,82 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     else if (key == "auto_capture.end_address") options.endAddressText = stripQuotes(value);
     else if (key == "auto_capture.key_lock") options.keyLock = parseBool(value);
 }
+
+ParsedCommandLine parseCommandLineImpl(int argc, char* argv[], const CliOptions& baseOptions, bool validate)
+{
+    ParsedCommandLine parsed;
+    parsed.options = baseOptions;
+    if (parsed.options.configPath.empty())
+    {
+        parsed.options.configPath = defaultConfigPath();
+    }
+
+    if (argc < 2)
+    {
+        parsed.command = "help";
+        return parsed;
+    }
+
+    parsed.command = argv[1];
+    if (parsed.command == "--help" || parsed.command == "-h")
+    {
+        parsed.command = "help";
+        return parsed;
+    }
+    int startIndex = 2;
+    if (parsed.command == "player" && argc > 2 && argv[2][0] != '-')
+    {
+        parsed.playerAction = argv[2];
+        startIndex = 3;
+        if (parsed.playerAction == "raw-command" && argc > 3)
+        {
+            parsed.playerRawCommand = argv[3];
+            startIndex = 4;
+        }
+    }
+
+    for (int i = startIndex; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") parsed.command = "help";
+        else if (arg == "--config")
+        {
+            parsed.options.configPath = requireValue(i, argc, argv, arg);
+            parsed.options.configPathExplicit = true;
+        }
+        else if (arg == "--debug") parsed.options.debug = true;
+        else if (arg == "--quiet") parsed.options.quiet = true;
+        else if (arg == "--vid") parsed.options.usbVid = parseU16(requireValue(i, argc, argv, arg));
+        else if (arg == "--pid") parsed.options.usbPid = parseU16(requireValue(i, argc, argv, arg));
+        else if (arg == "--usb-device") parsed.options.usbPreferredDevice = requireValue(i, argc, argv, arg);
+        else if (arg == "--disk-buffer-queue-size") parsed.options.diskBufferQueueSize = parseSize(requireValue(i, argc, argv, arg));
+        else if (arg == "--small-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = true;
+        else if (arg == "--large-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = false;
+        else if (arg == "--small-usb-transfers") parsed.options.useSmallUsbTransfers = true;
+        else if (arg == "--large-usb-transfers") parsed.options.useSmallUsbTransfers = false;
+        else if (arg == "--output") parsed.options.output = requireValue(i, argc, argv, arg);
+        else if (arg == "--json") parsed.options.jsonOutput = requireValue(i, argc, argv, arg);
+        else if (arg == "--output-dir") parsed.options.outputDir = requireValue(i, argc, argv, arg);
+        else if (arg == "--format") parsed.options.captureFormat = parseFormat(requireValue(i, argc, argv, arg));
+        else if (arg == "--test-mode") parsed.options.testMode = true;
+        else if (arg == "--duration") parsed.options.durationSeconds = std::stoi(requireValue(i, argc, argv, arg));
+        else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(i, argc, argv, arg);
+        else if (arg == "--serial-speed") parsed.options.serialSpeed = parseSerialSpeed(requireValue(i, argc, argv, arg));
+        else if (arg == "--player-profile") parsed.options.playerProfile = parsePlayerProfile(requireValue(i, argc, argv, arg));
+        else if (arg == "--disc-type") parsed.options.discType = parseDiscType(requireValue(i, argc, argv, arg));
+        else if (arg == "--mode") parsed.options.autoCaptureMode = parseAutoCaptureMode(requireValue(i, argc, argv, arg));
+        else if (arg == "--start-address") parsed.options.startAddressText = requireValue(i, argc, argv, arg);
+        else if (arg == "--end-address") parsed.options.endAddressText = requireValue(i, argc, argv, arg);
+        else if (arg == "--key-lock") parsed.options.keyLock = true;
+        else throw std::runtime_error("unknown option: " + arg);
+    }
+    applyAddressFields(parsed.options);
+    if (validate)
+    {
+        validateAutoCaptureOptions(parsed);
+    }
+    return parsed;
+}
 }
 
 std::filesystem::path defaultConfigPath()
@@ -263,79 +339,12 @@ ParsedCommandLine parseCommandLine(int argc, char* argv[])
 {
     CliOptions options;
     options.configPath = defaultConfigPath();
-    return parseCommandLine(argc, argv, options);
+    return parseCommandLineImpl(argc, argv, options, false);
 }
 
 ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& baseOptions)
 {
-    ParsedCommandLine parsed;
-    parsed.options = baseOptions;
-    if (parsed.options.configPath.empty())
-    {
-        parsed.options.configPath = defaultConfigPath();
-    }
-
-    if (argc < 2)
-    {
-        parsed.command = "help";
-        return parsed;
-    }
-
-    parsed.command = argv[1];
-    if (parsed.command == "--help" || parsed.command == "-h")
-    {
-        parsed.command = "help";
-        return parsed;
-    }
-    int startIndex = 2;
-    if (parsed.command == "player" && argc > 2 && argv[2][0] != '-')
-    {
-        parsed.playerAction = argv[2];
-        startIndex = 3;
-        if (parsed.playerAction == "raw-command" && argc > 3)
-        {
-            parsed.playerRawCommand = argv[3];
-            startIndex = 4;
-        }
-    }
-
-    for (int i = startIndex; i < argc; ++i)
-    {
-        std::string arg = argv[i];
-        if (arg == "--help" || arg == "-h") parsed.command = "help";
-        else if (arg == "--config")
-        {
-            parsed.options.configPath = requireValue(i, argc, argv, arg);
-            parsed.options.configPathExplicit = true;
-        }
-        else if (arg == "--debug") parsed.options.debug = true;
-        else if (arg == "--quiet") parsed.options.quiet = true;
-        else if (arg == "--vid") parsed.options.usbVid = parseU16(requireValue(i, argc, argv, arg));
-        else if (arg == "--pid") parsed.options.usbPid = parseU16(requireValue(i, argc, argv, arg));
-        else if (arg == "--usb-device") parsed.options.usbPreferredDevice = requireValue(i, argc, argv, arg);
-        else if (arg == "--disk-buffer-queue-size") parsed.options.diskBufferQueueSize = parseSize(requireValue(i, argc, argv, arg));
-        else if (arg == "--small-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = true;
-        else if (arg == "--large-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = false;
-        else if (arg == "--small-usb-transfers") parsed.options.useSmallUsbTransfers = true;
-        else if (arg == "--large-usb-transfers") parsed.options.useSmallUsbTransfers = false;
-        else if (arg == "--output") parsed.options.output = requireValue(i, argc, argv, arg);
-        else if (arg == "--json") parsed.options.jsonOutput = requireValue(i, argc, argv, arg);
-        else if (arg == "--output-dir") parsed.options.outputDir = requireValue(i, argc, argv, arg);
-        else if (arg == "--format") parsed.options.captureFormat = parseFormat(requireValue(i, argc, argv, arg));
-        else if (arg == "--test-mode") parsed.options.testMode = true;
-        else if (arg == "--duration") parsed.options.durationSeconds = std::stoi(requireValue(i, argc, argv, arg));
-        else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(i, argc, argv, arg);
-        else if (arg == "--serial-speed") parsed.options.serialSpeed = parseSerialSpeed(requireValue(i, argc, argv, arg));
-        else if (arg == "--player-profile") parsed.options.playerProfile = parsePlayerProfile(requireValue(i, argc, argv, arg));
-        else if (arg == "--disc-type") parsed.options.discType = parseDiscType(requireValue(i, argc, argv, arg));
-        else if (arg == "--mode") parsed.options.autoCaptureMode = parseAutoCaptureMode(requireValue(i, argc, argv, arg));
-        else if (arg == "--start-address") parsed.options.startAddressText = requireValue(i, argc, argv, arg);
-        else if (arg == "--end-address") parsed.options.endAddressText = requireValue(i, argc, argv, arg);
-        else if (arg == "--key-lock") parsed.options.keyLock = true;
-        else throw std::runtime_error("unknown option: " + arg);
-    }
-    applyAddressFields(parsed.options);
-    return parsed;
+    return parseCommandLineImpl(argc, argv, baseOptions, true);
 }
 
 std::string captureFormatExtension(CaptureFormatCli format)
@@ -426,6 +435,22 @@ bool shouldStopAutoCaptureForPlayerState(
     return playerState == PlayerStateCli::Stop ||
         playerState == PlayerStateCli::Pause ||
         playerState == PlayerStateCli::StillFrame;
+}
+
+void validateAutoCaptureOptions(const ParsedCommandLine& parsed)
+{
+    if (parsed.command != "auto-capture" || parsed.options.autoCaptureMode != AutoCaptureModeCli::Partial)
+    {
+        return;
+    }
+    if (parsed.options.endAddress <= 0)
+    {
+        throw std::runtime_error("partial auto-capture requires --end-address");
+    }
+    if (parsed.options.endAddress <= parsed.options.startAddress)
+    {
+        throw std::runtime_error("partial auto-capture requires --end-address greater than --start-address");
+    }
 }
 
 std::string playerProfileToString(PlayerProfileCli profile)

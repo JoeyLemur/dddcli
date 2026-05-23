@@ -80,8 +80,8 @@ Auto-capture options:
 
 - `--disc-type cav|clv`: required for auto-capture.
 - `--mode whole-disc|lead-in|partial`: capture range mode.
-- `--start-address <n>` and `--end-address <n>`: frame address for CAV, normalized seconds or compact timecode for CLV.
-- `--key-lock`: key-lock the player during capture and release it during cleanup.
+- `--start-address <n>` and `--end-address <n>`: frame address for CAV, normalized seconds or compact timecode for CLV. Partial auto-capture requires the normalized end address to be greater than the start address.
+- `--key-lock`: key-lock the player during capture and release it during cleanup. If the player cannot enable key lock, auto-capture aborts before capture starts.
 
 ## Config Keys
 

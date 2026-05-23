@@ -131,6 +131,7 @@ bool shouldStopAutoCaptureForPlayerState(
     DiscTypeCli discType,
     const AutoCaptureStopState& state,
     PlayerStateCli playerState);
+void validateAutoCaptureOptions(const ParsedCommandLine& parsed);
 std::string playerProfileToString(PlayerProfileCli profile);
 std::string transferResultToString(UsbDeviceBase::TransferResult result);
 void printUsage();
