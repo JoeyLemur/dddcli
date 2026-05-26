@@ -122,6 +122,7 @@ protected:
     // Utility methods
     bool LockMemoryBufferIntoPhysicalMemory(void* baseAddress, size_t sizeInBytes);
     void UnlockMemoryBuffer(void* baseAddress, size_t sizeInBytes);
+    bool CheckMemoryLockLimit(size_t requiredLockSizeInBytes) const;
     bool SetCurrentThreadRealtimePriority(ThreadPriorityRestoreInfo& priorityRestoreInfo);
     void RestoreCurrentThreadPriority(const ThreadPriorityRestoreInfo& priorityRestoreInfo);
 
@@ -141,6 +142,11 @@ private:
 #ifdef _WIN32
         int originalPriorityClass;
 #endif
+    };
+    struct LockedMemoryRegion
+    {
+        void* baseAddress = nullptr;
+        size_t sizeInBytes = 0;
     };
 
 private:
@@ -230,6 +236,8 @@ private:
     // Locked memory state
     size_t lockedMemorySizeInBytes = 0;
     size_t lockedMemoryBufferCount = 0;
+    std::vector<LockedMemoryRegion> lockedMemoryRegions;
+    bool memoryLockingEnabled = true;
     size_t originalProcessMinimumWorkingSetSizeInBytes = 0;
     size_t originalProcessMaximumWorkingSetSizeInBytes = 0;
 

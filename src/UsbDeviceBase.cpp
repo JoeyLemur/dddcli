@@ -2,9 +2,13 @@
 #ifdef _WIN32
 #include <memoryapi.h>
 #else
+#include <cerrno>
 #include <sched.h>
+#include <cstring>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #endif
+#include <algorithm>
 #include <iostream>
 #include <thread>
 #include <functional>
@@ -140,6 +144,7 @@ bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureF
     captureIsTestMode = isTestMode;
     currentUsbTransferQueueSizeInBytes = usbTransferQueueSizeInBytes;
     currentUseSmallUsbTransfers = useSmallUsbTransfers;
+    memoryLockingEnabled = true;
 
     // Initialize capture status
     transferInProgress = true;
@@ -250,6 +255,13 @@ void UsbDeviceBase::CaptureThread()
     {
         conversionBuffers[i].resize(requiredConversionBufferSize);
     }
+
+    size_t requiredLockSizeInBytes =
+        (requiredConversionBufferSize * conversionBufferCount) +
+        (diskBufferSizeInBytes * totalDiskBufferEntryCount) +
+        (sizeof(diskBufferEntries[0]) * totalDiskBufferEntryCount) +
+        sizeof(*this);
+    memoryLockingEnabled = CheckMemoryLockLimit(requiredLockSizeInBytes);
 
     // Lock all the critical structures into physical memory. This stops these buffers getting paged out, which could
     // cause page faults and lead to missed data packets.
@@ -1099,6 +1111,11 @@ bool UsbDeviceBase::GetNextBufferSample(std::vector<uint8_t>& bufferSample)
 //----------------------------------------------------------------------------------------------------------------------
 bool UsbDeviceBase::LockMemoryBufferIntoPhysicalMemory(void* baseAddress, size_t sizeInBytes)
 {
+    if (!memoryLockingEnabled || baseAddress == nullptr || sizeInBytes == 0)
+    {
+        return true;
+    }
+
 #ifdef _WIN32
     // Retrieve the Windows page allocation size
     SYSTEM_INFO sysInfo;
@@ -1132,7 +1149,7 @@ bool UsbDeviceBase::LockMemoryBufferIntoPhysicalMemory(void* baseAddress, size_t
 #else
     if (mlock(baseAddress, sizeInBytes) == -1)
     {
-        Log().Error("mlock failed");
+        Log().Error("mlock failed for {0} bytes: {1}", sizeInBytes, std::strerror(errno));
         return false;
     }
 #endif
@@ -1140,12 +1157,23 @@ bool UsbDeviceBase::LockMemoryBufferIntoPhysicalMemory(void* baseAddress, size_t
     // Increase the totals of locked memory
     lockedMemorySizeInBytes += sizeInBytes;
     ++lockedMemoryBufferCount;
+    lockedMemoryRegions.push_back({ baseAddress, sizeInBytes });
     return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 void UsbDeviceBase::UnlockMemoryBuffer(void* baseAddress, size_t sizeInBytes)
 {
+    auto region = std::find_if(lockedMemoryRegions.begin(), lockedMemoryRegions.end(),
+        [baseAddress, sizeInBytes](const LockedMemoryRegion& candidate)
+        {
+            return candidate.baseAddress == baseAddress && candidate.sizeInBytes == sizeInBytes;
+        });
+    if (region == lockedMemoryRegions.end())
+    {
+        return;
+    }
+
     // Release the lock on the target memory buffer
 #ifdef _WIN32
     BOOL virtualUnlockReturn = VirtualUnlock(baseAddress, sizeInBytes);
@@ -1162,6 +1190,7 @@ void UsbDeviceBase::UnlockMemoryBuffer(void* baseAddress, size_t sizeInBytes)
     // Decrease the totals of locked memory
     lockedMemorySizeInBytes -= sizeInBytes;
     --lockedMemoryBufferCount;
+    lockedMemoryRegions.erase(region);
 
 #ifdef _WIN32
     // Retrieve the Windows page allocation size
@@ -1180,6 +1209,37 @@ void UsbDeviceBase::UnlockMemoryBuffer(void* baseAddress, size_t sizeInBytes)
         Log().Error("SetProcessWorkingSetSize failed with error code {0}", lastError);
         return;
     }
+#endif
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+bool UsbDeviceBase::CheckMemoryLockLimit(size_t requiredLockSizeInBytes) const
+{
+#ifdef _WIN32
+    (void)requiredLockSizeInBytes;
+    return true;
+#else
+    rlimit memoryLockLimit{};
+    if (getrlimit(RLIMIT_MEMLOCK, &memoryLockLimit) != 0)
+    {
+        Log().Warning("getrlimit(RLIMIT_MEMLOCK) failed: {0}", std::strerror(errno));
+        return true;
+    }
+    if (memoryLockLimit.rlim_cur == RLIM_INFINITY || memoryLockLimit.rlim_cur >= requiredLockSizeInBytes)
+    {
+        return true;
+    }
+
+    std::string hardLimit = memoryLockLimit.rlim_max == RLIM_INFINITY
+        ? std::string("unlimited")
+        : std::to_string((unsigned long long)memoryLockLimit.rlim_max);
+    Log().Warning(
+        "RLIMIT_MEMLOCK is {0} bytes, but capture buffers need about {1} bytes locked; "
+        "raise the user's memlock limit or mlock will fail. Hard limit is {2} bytes.",
+        (unsigned long long)memoryLockLimit.rlim_cur,
+        (unsigned long long)requiredLockSizeInBytes,
+        hardLimit);
+    return false;
 #endif
 }
 
