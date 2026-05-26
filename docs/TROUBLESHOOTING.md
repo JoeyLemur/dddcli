@@ -116,11 +116,51 @@ Capture files can be large. If capture fails after starting:
 - confirm the output filesystem has enough free space
 - write to fast local storage when possible
 - try the default `.lds` format first
-- reduce USB memory pressure with `--small-usb-transfer-queue` if startup reports a USB memory limit
+- on Linux, use the host tuning below if startup reports `USB memory limit`, `LIBUSB_ERROR_NO_MEM`, or `mlock failed`
+- use `--small-usb-transfer-queue` only when the host cannot be tuned
 - if writes cannot keep up, keep `--small-usb-transfers` enabled and try faster local storage
 - keep the JSON sidecar; it records the transfer result and sample statistics
 
 If `--json` points to a path in a missing directory, the CLI creates that directory before writing the sidecar.
+
+### Linux Capture Host Tuning
+
+The default capture queue needs enough kernel USBFS memory for libusb transfers and enough locked-memory allowance for capture buffers. Use these capture-host defaults:
+
+- `usbcore.usbfs_memory_mb=512`
+- `memlock=524288` KiB, or `unlimited`
+
+Check the active values:
+
+```sh
+cat /sys/module/usbcore/parameters/usbfs_memory_mb
+ulimit -l
+```
+
+Set USBFS memory until reboot:
+
+```sh
+echo 512 | sudo tee /sys/module/usbcore/parameters/usbfs_memory_mb
+```
+
+Make USBFS memory persistent with `/etc/modprobe.d/usbcore.conf`:
+
+```text
+options usbcore usbfs_memory_mb=512
+```
+
+Some systems need the initramfs rebuilt or `usbcore.usbfs_memory_mb=512` added to the kernel command line before this persistent setting takes effect.
+
+For a PAM-login shell, raise `memlock` for the capture user or group with `/etc/security/limits.d/domesday.conf`:
+
+```text
+captureuser soft memlock 524288
+captureuser hard memlock 524288
+@domesday soft memlock 524288
+@domesday hard memlock 524288
+```
+
+Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their inherited limits, so start a fresh login session before re-checking `ulimit -l`. If a desktop-launched app does not inherit the configured limit, launch it from a fresh login shell or configure its launcher/service limit explicitly. For a systemd service, set `LimitMEMLOCK=512M` in the service unit.
 
 ## What To Record For Bugs
 
