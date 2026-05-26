@@ -141,7 +141,7 @@ The command line and config parser accept the canonical values shown above plus 
 
 ## CLV Addresses
 
-Internally, CLV addresses are normalized elapsed seconds.
+Internally, CLV addresses are player-reported timecodes normalized to seconds.
 
 For `--start-address`, `--end-address`, and config addresses:
 
@@ -150,3 +150,5 @@ For `--start-address`, `--end-address`, and config addresses:
 - 7 digits are parsed as `HMMSSFF`, such as `0123400`, with frame digits ignored
 
 For example, `754`, `01234`, and `0123400` all refer to 12 minutes and 34 seconds.
+
+CLV addresses are absolute displayed timecodes from the player, not offsets relative to the first playable timecode on a disc. Whole-disc auto-capture starts from spin-down/lead-in and can handle CLV discs that do not begin at `0:00:00`; for `partial` or `lead-in` ranges, supply the actual displayed timecodes you want to target.

@@ -181,6 +181,7 @@ Expected:
 - player seeks near 1 minute
 - capture continues through second 90 and stops after the player reports second 91, after the CLV 1.5 second post-roll fallback, or cleanly if the player stops/pauses/still-frames during post-roll
 - JSON `minTimeCode` and `maxTimeCode` are normalized seconds, not raw compact timecode
+- JSON `maxTimeCode` reflects addresses seen during capture and does not include the earlier disc-end probe
 
 Repeat compact input forms:
 
@@ -219,6 +220,7 @@ Expected:
 - player seeks to frame 1000
 - capture stops around frame 1300
 - JSON uses `minFrameNumber` and `maxFrameNumber`
+- JSON `maxFrameNumber` reflects frames seen during capture and does not include the earlier disc-end probe
 
 ## 7. Key Lock And Cleanup
 
@@ -247,6 +249,21 @@ Expected:
 - USB capture stops cleanly
 - key lock is released
 - player ends in the documented post-capture state
+
+Repeat once more and interrupt during setup, before the `Capturing to ...` message appears if possible.
+
+Expected:
+
+- USB capture is not started
+- playback is not started by the CLI after the interrupt
+- key lock is released if it had already been enabled
+
+If a CAV player enters still-frame during capture and cannot be resumed by the CLI, expected behavior is:
+
+- USB capture stops cleanly
+- the command exits non-zero
+- the player is left in still-frame for inspection
+- JSON metadata is written if `--json` was requested and USB capture had already started
 
 ## 8. Manual Capture Smoke Test
 

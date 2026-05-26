@@ -1,3 +1,4 @@
+#include "AutoCaptureOrchestration.h"
 #include "CliConfig.h"
 #include "PlayerSerial.h"
 #include "ProgressLine.h"
@@ -603,6 +604,33 @@ int main()
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Clv, activePostRoll, PlayerStateCli::Play));
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Clv, activePostRoll, PlayerStateCli::Unknown));
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Cav, activePostRoll, PlayerStateCli::Stop));
+
+    CaptureMetadata cavMetadata;
+    recordAutoCaptureAddress(cavMetadata, DiscTypeCli::Cav, -1);
+    assert(!cavMetadata.minFrameNumber.has_value());
+    recordAutoCaptureAddress(cavMetadata, DiscTypeCli::Cav, 1300);
+    recordAutoCaptureAddress(cavMetadata, DiscTypeCli::Cav, 1000);
+    assert(cavMetadata.minFrameNumber == 1000);
+    assert(cavMetadata.maxFrameNumber == 1300);
+    assert(!cavMetadata.minTimeCode.has_value());
+    assert(!cavMetadata.maxTimeCode.has_value());
+
+    CaptureMetadata clvMetadata;
+    recordAutoCaptureAddress(clvMetadata, DiscTypeCli::Clv, 90);
+    recordAutoCaptureAddress(clvMetadata, DiscTypeCli::Clv, 60);
+    assert(clvMetadata.minTimeCode == 60);
+    assert(clvMetadata.maxTimeCode == 90);
+    assert(!clvMetadata.minFrameNumber.has_value());
+    assert(!clvMetadata.maxFrameNumber.has_value());
+
+    assert(shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::StillFrame, false));
+    assert(!shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::StillFrame, true));
+    assert(!shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::Play, false));
+    assert(!shouldFailCavStillFrameResume(DiscTypeCli::Clv, PlayerStateCli::StillFrame, false));
+    assert(finalPlayerActionForAutoCapture(DiscTypeCli::Cav, false) == AutoCaptureFinalPlayerAction::Stop);
+    assert(finalPlayerActionForAutoCapture(DiscTypeCli::Clv, false) == AutoCaptureFinalPlayerAction::Pause);
+    assert(finalPlayerActionForAutoCapture(DiscTypeCli::Cav, true) == AutoCaptureFinalPlayerAction::StillFrame);
+    assert(finalPlayerActionForAutoCapture(DiscTypeCli::Clv, true) == AutoCaptureFinalPlayerAction::StillFrame);
 
     std::filesystem::remove(path);
     std::filesystem::remove(quotedHashPath);

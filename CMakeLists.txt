@@ -12,6 +12,7 @@ add_executable(dddcli
     src/main.cpp
     src/CliConfig.cpp
     src/ConsoleLogger.cpp
+    src/AutoCaptureOrchestration.cpp
     src/CaptureMetadata.cpp
     src/PlayerSerial.cpp
     src/ProgressLine.cpp
@@ -34,6 +35,7 @@ if(BUILD_TESTING)
     add_executable(dddcli_tests
         tests/CliConfigTests.cpp
         src/CliConfig.cpp
+        src/AutoCaptureOrchestration.cpp
         src/PlayerSerial.cpp
         src/ProgressLine.cpp
     )

@@ -87,7 +87,7 @@ Supported capture formats are:
 
 If `--output` has no extension, the selected format extension is added. If no output path is provided, the tool creates a timestamped file under `--output-dir`, which defaults to the current directory. Generated filenames use `RF-Sample_YYYY-MM-DD_HH-MM-SS` or `TestData_YYYY-MM-DD_HH-MM-SS` when `--test-mode` is enabled.
 
-Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureInfo` for every capture, including the capture path, format, transfer result, duration, sample counts, clipping counts, and UTC creation timestamp. Auto-captures also populate `serialInfo` with player and disc fields; CAV metadata records `minFrameNumber` and `maxFrameNumber`, while CLV metadata records `minTimeCode` and `maxTimeCode` as normalized elapsed seconds.
+Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureInfo` for every capture, including the capture path, format, transfer result, duration, sample counts, clipping counts, and UTC creation timestamp. Auto-captures also populate `serialInfo` with player and disc fields; CAV metadata records `minFrameNumber` and `maxFrameNumber`, while CLV metadata records `minTimeCode` and `maxTimeCode` as player-reported timecodes normalized to seconds.
 
 ## Documentation
 
@@ -95,6 +95,7 @@ Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureIn
 - [Player Control](docs/PLAYER_CONTROL.md)
 - [Auto Capture](docs/AUTO_CAPTURE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [USB Capture Performance Testing](docs/USB_CAPTURE_PERFORMANCE_TESTING.md)
 - [Hardware Test Checklist](HARDWARE_TESTS.md)
 
 For contributor and agent guidance, see [AGENTS.md](AGENTS.md).

@@ -80,13 +80,15 @@ Use `player raw-command` to collect exact responses before changing command beha
 
 ## CLV Timecode Looks Wrong
 
-CLV addresses are normalized to seconds internally. The CLI accepts:
+CLV addresses are player-reported timecodes normalized to seconds internally. The CLI accepts:
 
 - `754`
 - `01234`
 - `0123400`
 
 All three mean 12 minutes and 34 seconds.
+
+These values are absolute displayed timecodes from the player. Whole-disc CLV auto-capture does not require the disc to begin at `0:00:00`, but manually supplied `--start-address` and `--end-address` values should match the disc's displayed timecodes rather than offsets from the first playable code.
 
 For raw hardware evidence, query:
 

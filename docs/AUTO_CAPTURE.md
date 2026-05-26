@@ -12,11 +12,13 @@
 
 For `whole-disc`, the detected disc end is always used. For `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. For `partial`, an end address beyond the detected disc end is capped with a warning, but the capture still fails if the start address is at or beyond the detected disc end. To detect the end address, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
 
+Whole-disc CLV capture starts from spin-down/lead-in and stops at the detected player-reported end timecode. It does not require the first playable CLV timecode to be `0:00:00`; a disc that begins at a later displayed timecode is still tracked by the actual addresses returned by the player.
+
 ## Disc Type
 
 `--disc-type cav|clv` is required. The CLI also asks the player for the loaded disc type and fails if the player response does not match the requested type.
 
-CAV uses frame addresses. CLV uses normalized elapsed seconds internally.
+CAV uses frame addresses. CLV uses player-reported timecodes normalized to seconds internally.
 
 ## CAV Stop Behavior
 
@@ -55,11 +57,13 @@ CLV start and end addresses may be:
 - compact `HMMSS`, such as `01234`
 - compact `HMMSSFF`, such as `0123400`
 
-All CLV forms normalize to elapsed seconds. `754`, `01234`, and `0123400` are equivalent.
+All CLV forms normalize to seconds from the displayed player timecode. `754`, `01234`, and `0123400` are equivalent.
+
+These CLV values are absolute player timecodes, not offsets relative to the first playable timecode on a particular disc. For example, if a disc starts at displayed timecode `0:05:00`, use `00500` or `300` to refer to that point in `partial` or `lead-in` ranges.
 
 ## Metadata
 
-Auto-capture metadata includes player model, player version, serial speed, disc type, disc status, and observed address bounds.
+Auto-capture metadata includes player model, player version, serial speed, disc type, disc status, and observed address bounds from the active capture loop. Disc-end probe addresses are not included in the captured min/max fields.
 
 The sidecar always includes a `captureInfo` object with the capture file path, capture format, test-mode flag, transfer result, duration, transfer and buffer counts, file size, sample statistics, clipping statistics, sequence marker presence, and UTC creation timestamp.
 
@@ -73,7 +77,7 @@ For CLV captures:
 - `minTimeCode`
 - `maxTimeCode`
 
-CLV metadata values are normalized seconds, not raw compact `HMMSS` or `HMMSSFF` strings.
+CLV metadata values are normalized seconds from the displayed player timecode, not raw compact `HMMSS` or `HMMSSFF` strings.
 
 ## Cleanup
 
@@ -81,9 +85,11 @@ The auto-capture path is designed to clean up on success, capture errors, and in
 
 - USB transfer is stopped if still running.
 - key lock is released if it was enabled. If requested key lock cannot be enabled, capture aborts before USB capture starts.
+- setup interruptions before USB capture starts abort without starting playback.
 - CAV captures end by stopping the player.
 - CLV captures end by pausing the player.
 - auto-capture address errors leave the player in still-frame for inspection.
+- CAV still-frame resume failures stop capture and leave the player in still-frame for inspection.
 - `SIGINT` and `SIGTERM` request an orderly stop; capture cleanup still runs before the process exits.
 
 If the final player cleanup command or key-lock release fails after capture, the CLI reports the failure and exits non-zero.
