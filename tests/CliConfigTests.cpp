@@ -334,6 +334,25 @@ int main()
     assert(preliminaryPartialParsed.command == "auto-capture");
     assert(preliminaryPartialParsed.options.autoCaptureMode == AutoCaptureModeCli::Partial);
 
+    const char* detectedClvPartialArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--mode",
+        "partial",
+        "--start-address",
+        "00100",
+        "--end-address",
+        "00130",
+    };
+    auto detectedClvPartialParsed = parseCommandLine(8, const_cast<char**>(detectedClvPartialArgv));
+    assert(detectedClvPartialParsed.options.discType == DiscTypeCli::Unknown);
+    assert(detectedClvPartialParsed.options.startAddress == 100);
+    assert(detectedClvPartialParsed.options.endAddress == 130);
+    applyDetectedDiscType(detectedClvPartialParsed.options, DiscTypeCli::Clv);
+    assert(detectedClvPartialParsed.options.discType == DiscTypeCli::Clv);
+    assert(detectedClvPartialParsed.options.startAddress == 60);
+    assert(detectedClvPartialParsed.options.endAddress == 90);
+
     const char* equalCavPartialArgv[] = {
         "dddcli",
         "auto-capture",

@@ -490,6 +490,12 @@ int parseClvAddressSeconds(const std::string& value)
     throw std::runtime_error("invalid CLV address length: " + value);
 }
 
+void applyDetectedDiscType(CliOptions& options, DiscTypeCli discType)
+{
+    options.discType = discType;
+    applyAddressFields(options);
+}
+
 AutoCaptureEndAddress resolveAutoCaptureEndAddress(
     AutoCaptureModeCli mode,
     int requestedEndAddress,
@@ -714,7 +720,7 @@ void printUsage()
         "  --serial-device <path>           serial device, e.g. /dev/ttyUSB0\n"
         "  --serial-speed auto|9600|4800|2400|1200\n"
         "  --player-profile auto|generic-level3|pioneer-ld-v4300d|pioneer-ld-v2200\n"
-        "  --disc-type cav|clv              required for auto-capture\n"
+        "  --disc-type cav|clv              override auto-detected disc type\n"
         "  --mode whole-disc|lead-in|partial\n"
         "  --start-address <n> --end-address <n>\n"
         "  --key-lock\n"

@@ -133,6 +133,7 @@ std::filesystem::path buildOutputPath(const CliOptions& options);
 UsbDeviceBase::CaptureFormat toUsbCaptureFormat(CaptureFormatCli format);
 std::string captureFormatExtension(CaptureFormatCli format);
 int parseClvAddressSeconds(const std::string& value);
+void applyDetectedDiscType(CliOptions& options, DiscTypeCli discType);
 AutoCaptureEndAddress resolveAutoCaptureEndAddress(
     AutoCaptureModeCli mode,
     int requestedEndAddress,
