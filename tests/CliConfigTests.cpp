@@ -91,6 +91,8 @@ int main()
     progressSnapshot.transfers = 123;
     progressSnapshot.samples = 456;
     assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123 samples=456");
+    progressSnapshot.playerPosition = "timecode=0:01:35";
+    assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123 samples=456 timecode=0:01:35");
 
     std::ostringstream liveOutput;
     ProgressLine liveProgress(liveOutput, false, true);
@@ -118,12 +120,19 @@ int main()
     quietProgress.finish();
     assert(quietOutput.str().empty());
 
-    std::ostringstream nonLiveOutput;
-    ProgressLine nonLiveProgress(nonLiveOutput, false, false);
-    nonLiveProgress.update(progressSnapshot);
-    nonLiveProgress.clear();
-    nonLiveProgress.finish();
-    assert(nonLiveOutput.str().empty());
+    std::ostringstream periodicOutput;
+    ProgressLine periodicProgress(periodicOutput, false, false);
+    auto periodicStart = std::chrono::steady_clock::now();
+    periodicProgress.update({ 1, 1 * 1024 * 1024, 1, 2, "frame=12345" }, periodicStart);
+    assert(periodicOutput.str() == "elapsed=1s written=1MiB transfers=1 samples=2 frame=12345\n");
+    periodicProgress.update({ 2, 2 * 1024 * 1024, 3, 4 }, periodicStart + std::chrono::seconds(9));
+    assert(periodicOutput.str() == "elapsed=1s written=1MiB transfers=1 samples=2 frame=12345\n");
+    periodicProgress.update({ 11, 3 * 1024 * 1024, 5, 6 }, periodicStart + std::chrono::seconds(10));
+    assert(periodicOutput.str().ends_with("elapsed=11s written=3MiB transfers=5 samples=6\n"));
+    std::string periodicText = periodicOutput.str();
+    periodicProgress.clear();
+    periodicProgress.finish();
+    assert(periodicOutput.str() == periodicText);
 
     CliOptions base;
     base.configPath = "custom.toml";
@@ -220,6 +229,27 @@ int main()
     assert(profileParsed.options.playerProfile == PlayerProfileCli::PioneerLdV2200);
     assert(profileParsed.options.startAddress == 754);
     assert(profileParsed.options.endAddress == 754);
+
+    const char* noOsdArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "clv",
+        "--no-on-screen-display",
+    };
+    auto noOsdParsed = parseCommandLine(5, const_cast<char**>(noOsdArgv));
+    assert(!noOsdParsed.options.onScreenDisplay);
+    CliOptions disabledOsdBase;
+    disabledOsdBase.onScreenDisplay = false;
+    const char* forceOsdArgv[] = {
+        "dddcli",
+        "auto-capture",
+        "--disc-type",
+        "clv",
+        "--on-screen-display",
+    };
+    auto forceOsdParsed = parseCommandLine(5, const_cast<char**>(forceOsdArgv), disabledOsdBase);
+    assert(forceOsdParsed.options.onScreenDisplay);
 
     const char* validPartialArgv[] = {
         "dddcli",
@@ -399,6 +429,9 @@ int main()
     assert(playerRawCommandFits(std::string(19, 'A') + "\r"));
     assert(!playerRawCommandFits(std::string(20, 'A')));
     assert(!playerRawCommandFits(std::string(21, 'A') + "\r"));
+    assert(playerTimeCodeSeekCommand(PlayerProfileCli::PioneerLdV2200, 60) == "TM00100SE\r");
+    assert(playerTimeCodeSeekCommand(PlayerProfileCli::PioneerLdV4300D, 60) == "FR0010000SE\r");
+    assert(playerTimeCodeSeekCommand(PlayerProfileCli::GenericLevel3, 60) == "FR0010000SE\r");
 
     auto path = std::filesystem::temp_directory_path() / "dddcli-test.toml";
     {
@@ -418,6 +451,7 @@ int main()
         file << "disc_type = \"clv\"\n";
         file << "start_address = \"01234\"\n";
         file << "end_address = \"0123400\"\n";
+        file << "on_screen_display = false\n";
     }
 
     TomlConfig config;
@@ -436,6 +470,7 @@ int main()
     assert(options.discType == DiscTypeCli::Clv);
     assert(options.startAddress == 754);
     assert(options.endAddress == 754);
+    assert(!options.onScreenDisplay);
 
     auto quotedHashPath = std::filesystem::temp_directory_path() / "dddcli-quoted-hash-test.toml";
     {
@@ -525,23 +560,38 @@ int main()
     auto wholeDiscEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::WholeDisc, 90, 60, 75);
     assert(wholeDiscEnd.endAddress == 75);
     assert(!wholeDiscEnd.cappedToDiscEnd);
+    assert(wholeDiscEnd.usesDetectedDiscEnd);
     assert(wholeDiscEnd.validRange);
     auto leadInDefaultEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::LeadIn, 0, 0, 75);
     assert(leadInDefaultEnd.endAddress == 75);
     assert(!leadInDefaultEnd.cappedToDiscEnd);
+    assert(leadInDefaultEnd.usesDetectedDiscEnd);
     assert(leadInDefaultEnd.validRange);
     auto leadInCappedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::LeadIn, 90, 0, 75);
     assert(leadInCappedEnd.endAddress == 75);
     assert(leadInCappedEnd.cappedToDiscEnd);
+    assert(leadInCappedEnd.usesDetectedDiscEnd);
     assert(leadInCappedEnd.validRange);
     auto partialCappedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 90, 60, 75);
     assert(partialCappedEnd.endAddress == 75);
     assert(partialCappedEnd.cappedToDiscEnd);
+    assert(partialCappedEnd.usesDetectedDiscEnd);
     assert(partialCappedEnd.validRange);
+    auto partialRequestedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 70, 60, 75);
+    assert(partialRequestedEnd.endAddress == 70);
+    assert(!partialRequestedEnd.cappedToDiscEnd);
+    assert(!partialRequestedEnd.usesDetectedDiscEnd);
+    assert(partialRequestedEnd.validRange);
     auto partialInvalidEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 90, 75, 75);
     assert(partialInvalidEnd.endAddress == 75);
     assert(partialInvalidEnd.cappedToDiscEnd);
+    assert(partialInvalidEnd.usesDetectedDiscEnd);
     assert(!partialInvalidEnd.validRange);
+
+    assert(clvEndAddressPostRoll(wholeDiscEnd, 75) == ClvSecondAddressPostRoll);
+    auto wholeDiscMinuteEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::WholeDisc, 0, 0, 3600);
+    assert(clvEndAddressPostRoll(wholeDiscMinuteEnd, 3600) == ClvMinuteAddressPostRoll);
+    assert(clvEndAddressPostRoll(partialRequestedEnd, 3600) == ClvSecondAddressPostRoll);
 
     assert(playerProfileForModelCode("15", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV4300D);
     assert(playerProfileForModelCode("07", PlayerProfileCli::Auto) == PlayerProfileCli::PioneerLdV2200);
@@ -559,6 +609,9 @@ int main()
     auto timeCode7 = parsePlayerTimeCodeResponse(">0123400\r");
     assert(timeCode7.address == 754);
     assert(timeCode7.inLeadOut);
+    auto minuteOnlyTimeCode = parsePlayerTimeCodeResponse("123\r");
+    assert(minuteOnlyTimeCode.address == 4980);
+    assert(parsePlayerTimeCodeResponse("199\r").address == -1);
     auto frame = parsePlayerFrameResponse("<12345\r");
     assert(frame.address == 12345);
     assert(frame.inLeadIn);
@@ -593,6 +646,11 @@ int main()
     assert(!shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 90, 90, now, clvAdvanceStop));
     assert(shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 91, 90, now + std::chrono::milliseconds(500), clvAdvanceStop));
 
+    AutoCaptureStopState clvMinuteStop;
+    assert(!shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now, clvMinuteStop, ClvMinuteAddressPostRoll));
+    assert(!shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now + std::chrono::milliseconds(59999), clvMinuteStop, ClvMinuteAddressPostRoll));
+    assert(shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now + std::chrono::seconds(60), clvMinuteStop, ClvMinuteAddressPostRoll));
+
     AutoCaptureStopState inactivePostRoll;
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Clv, inactivePostRoll, PlayerStateCli::Stop));
 
@@ -604,6 +662,11 @@ int main()
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Clv, activePostRoll, PlayerStateCli::Play));
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Clv, activePostRoll, PlayerStateCli::Unknown));
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Cav, activePostRoll, PlayerStateCli::Stop));
+    assert(shouldStopAutoCaptureOnClvWrap(2687, 0, 2688));
+    assert(shouldStopAutoCaptureOnClvWrap(2600, 0, 2688));
+    assert(!shouldStopAutoCaptureOnClvWrap(2500, 0, 2688));
+    assert(!shouldStopAutoCaptureOnClvWrap(2687, 2688, 2688));
+    assert(!shouldStopAutoCaptureOnClvWrap(-1, 0, 2688));
 
     CaptureMetadata cavMetadata;
     recordAutoCaptureAddress(cavMetadata, DiscTypeCli::Cav, -1);
@@ -628,7 +691,7 @@ int main()
     assert(!shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::Play, false));
     assert(!shouldFailCavStillFrameResume(DiscTypeCli::Clv, PlayerStateCli::StillFrame, false));
     assert(finalPlayerActionForAutoCapture(DiscTypeCli::Cav, false) == AutoCaptureFinalPlayerAction::Stop);
-    assert(finalPlayerActionForAutoCapture(DiscTypeCli::Clv, false) == AutoCaptureFinalPlayerAction::Pause);
+    assert(finalPlayerActionForAutoCapture(DiscTypeCli::Clv, false) == AutoCaptureFinalPlayerAction::Stop);
     assert(finalPlayerActionForAutoCapture(DiscTypeCli::Cav, true) == AutoCaptureFinalPlayerAction::StillFrame);
     assert(finalPlayerActionForAutoCapture(DiscTypeCli::Clv, true) == AutoCaptureFinalPlayerAction::StillFrame);
 

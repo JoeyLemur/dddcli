@@ -52,12 +52,14 @@ Confirm kernel USBFS and locked-memory headroom.
 ```sh
 cat /sys/module/usbcore/parameters/usbfs_memory_mb
 ulimit -l
+ulimit -r
 ```
 
 Expected:
 
 - `usbfs_memory_mb` is at least `512`
 - `ulimit -l` is at least `524288` KiB, or `unlimited`
+- `ulimit -r` is `80` or higher if validating realtime capture priority
 
 Record storage and filesystem details for the output path:
 

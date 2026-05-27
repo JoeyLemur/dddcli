@@ -67,6 +67,10 @@ Run a partial CLV auto-capture:
   --json /tmp/clv-test.json
 ```
 
+Auto-capture turns the player's on-screen display on by default. Use `--no-on-screen-display` when the player OSD should be disabled during capture.
+
+Interactive captures show one updating progress line on stderr. When stderr is redirected or piped through `tee`, captures emit newline progress about every 10 seconds; auto-capture progress includes `timecode=H:MM:SS` for CLV or `frame=<n>` for CAV once the player address is known. Successful auto-captures stop the player during cleanup.
+
 ## Commands
 
 - `dddcli list-devices`: print visible Domesday Duplicator USB device paths.

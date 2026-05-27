@@ -42,6 +42,7 @@ public:
 
     bool setPlayerState(PlayerStateCli state);
     bool setKeyLock(bool locked);
+    bool setOnScreenDisplay(bool enabled);
     bool setPositionFrame(int address);
     bool setPositionTimeCode(int address);
     std::string rawCommand(std::string command, int expectedResponseCount = 1);
@@ -67,6 +68,7 @@ private:
 
 PlayerProfileCli playerProfileForModelCode(const std::string& playerCode, PlayerProfileCli requestedProfile);
 bool playerRawCommandFits(std::string command);
+std::string playerTimeCodeSeekCommand(PlayerProfileCli profile, int address);
 float parsePlayerPhysicalPositionResponse(const std::string& response);
 AddressResult parsePlayerFrameResponse(std::string response);
 AddressResult parsePlayerTimeCodeResponse(std::string response);

@@ -28,30 +28,34 @@ The profiles currently share most command strings:
 - `?D`: disc status and disc type query.
 - `?F`: current CAV frame query.
 - `?T`: current CLV timecode query.
-- `$Y`: standard user code query.
+- `$Y`: inherited/legacy standard user code query from the original GUI code. This may be model-specific; it is not currently verified against the LD-V2200 Level III manual.
 - `?U`: Pioneer user code query.
 - `PL`: play.
 - `PL64RBMF`: play with stop codes disabled.
 - `PA`: pause.
-- `ST`: still frame.
+- `ST`: still frame. The Level III manual lists this as valid from Play Mode.
 - `RJ`: stop/reject.
 - `1KL`: key lock on.
 - `0KL`: key lock off.
-- `FR<address>SE`: seek to frame or timecode address.
+- `1DS`: on-screen display on.
+- `0DS`: on-screen display off.
+- `FR<address>SE`: seek to CAV frame address; generic and LD-V4300D CLV profiles also use this for timecode seeks.
+- `TM<address>SE`: LD-V2200 CLV timecode seek.
 
-The LD-V2200 profile formats CLV seek addresses as 5-digit `HMMSS`. The generic and LD-V4300D profiles format CLV seek addresses as 7-digit `HMMSSFF`.
+The LD-V2200 profile sends CLV seeks as `TM` plus 5-digit `HMMSS`. The generic and LD-V4300D profiles send CLV seeks as `FR` plus 7-digit `HMMSSFF`.
 
 ## CLV Timecode Parsing
 
 CLV responses are parsed tolerantly:
 
+- `HMM`, such as `012`, is accepted for minute-only CLV timecodes.
 - `HMMSS`, such as `01234`, is accepted.
 - `HMMSSFF`, such as `0123400`, is accepted and the frame digits are ignored.
 - leading `<` and `>` markers are preserved in raw output and tolerated by parsed address reads.
 
-Parsed CLV addresses are normalized to elapsed seconds. For example, both `01234` and `0123400` normalize to `754`.
+Parsed CLV addresses are normalized to seconds from the displayed player timecode. For example, both `01234` and `0123400` normalize to `754`; minute-only `012` normalizes to `720`.
 
-The LD-V2200 has been observed returning 5-digit CLV timecodes over serial. The LD-V4300D 7-digit behavior is an inherited assumption until verified on real hardware.
+The LD-V2200 has been observed returning 5-digit CLV timecodes over serial and accepting `TM00100SE` for a 1-minute CLV seek. The LD-V4300D 7-digit behavior is an inherited assumption until verified on real hardware.
 
 ## Raw Serial Probing
 
@@ -82,6 +86,8 @@ $Y
 ```
 
 Keep the exact command, profile, serial speed, disc type, and raw escaped response with the hardware notes.
+
+For `?U`, Pioneer documents `E04` as the response when no data is encoded in the Pioneer User's Code. Treat that as a valid no-data result, not a serial transport failure. `$Y` is retained for parity with the inherited GUI workflow, but should be treated as legacy/model-specific until verified on target hardware documentation.
 
 ## Status Output
 

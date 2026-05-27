@@ -1,10 +1,16 @@
 #include "ProgressLine.h"
 
 #include <cstdio>
+#include <chrono>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <unistd.h>
+
+namespace
+{
+constexpr auto PeriodicProgressInterval = std::chrono::seconds(10);
+}
 
 std::string formatCaptureProgressLine(const CaptureProgressSnapshot& snapshot)
 {
@@ -13,6 +19,10 @@ std::string formatCaptureProgressLine(const CaptureProgressSnapshot& snapshot)
            << "written=" << snapshot.bytesWritten / (1024 * 1024) << "MiB "
            << "transfers=" << snapshot.transfers
            << " samples=" << snapshot.samples;
+    if (!snapshot.playerPosition.empty())
+    {
+        stream << ' ' << snapshot.playerPosition;
+    }
     return stream.str();
 }
 
@@ -22,17 +32,34 @@ ProgressLine::ProgressLine(bool quiet)
 }
 
 ProgressLine::ProgressLine(std::ostream& output, bool quiet, bool live)
-    : output(output), quiet(quiet), live(live)
+    : output(output), quiet(quiet), mode(live ? OutputMode::Live : OutputMode::Periodic)
 {
 }
 
 void ProgressLine::update(const CaptureProgressSnapshot& snapshot)
 {
-    if (quiet || !live)
+    update(snapshot, std::chrono::steady_clock::now());
+}
+
+void ProgressLine::update(const CaptureProgressSnapshot& snapshot, const std::chrono::steady_clock::time_point& now)
+{
+    if (quiet)
     {
         return;
     }
 
+    if (mode == OutputMode::Live)
+    {
+        updateLive(snapshot);
+    }
+    else
+    {
+        updatePeriodic(snapshot, now);
+    }
+}
+
+void ProgressLine::updateLive(const CaptureProgressSnapshot& snapshot)
+{
     std::string line = formatCaptureProgressLine(snapshot);
     output << '\r' << line;
     if (lastWidth > line.size())
@@ -45,9 +72,23 @@ void ProgressLine::update(const CaptureProgressSnapshot& snapshot)
     active = true;
 }
 
+void ProgressLine::updatePeriodic(const CaptureProgressSnapshot& snapshot, const std::chrono::steady_clock::time_point& now)
+{
+    if (active && now - lastPeriodicUpdate < PeriodicProgressInterval)
+    {
+        return;
+    }
+
+    output << formatCaptureProgressLine(snapshot) << '\n';
+    output.flush();
+
+    lastPeriodicUpdate = now;
+    active = true;
+}
+
 void ProgressLine::clear()
 {
-    if (quiet || !live || !active)
+    if (quiet || mode != OutputMode::Live || !active)
     {
         return;
     }
@@ -59,7 +100,7 @@ void ProgressLine::clear()
 
 void ProgressLine::finish()
 {
-    if (quiet || !live || !active)
+    if (quiet || mode != OutputMode::Live || !active)
     {
         return;
     }

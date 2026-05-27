@@ -35,6 +35,9 @@ struct PlayerCommandProfile
     const char* stop;
     const char* keyLock;
     const char* keyUnlock;
+    const char* onScreenDisplayOn;
+    const char* onScreenDisplayOff;
+    const char* timeCodeSeekPrefix;
     int timeCodeAddressDigits;
 };
 
@@ -55,6 +58,9 @@ const PlayerCommandProfile& commandProfile(PlayerProfileCli profile)
         "RJ\r",
         "1KL\r",
         "0KL\r",
+        "1DS\r",
+        "0DS\r",
+        "FR",
         7,
     };
     static const PlayerCommandProfile ldv4300d = {
@@ -72,6 +78,9 @@ const PlayerCommandProfile& commandProfile(PlayerProfileCli profile)
         "RJ\r",
         "1KL\r",
         "0KL\r",
+        "1DS\r",
+        "0DS\r",
+        "FR",
         7,
     };
     static const PlayerCommandProfile ldv2200 = {
@@ -89,6 +98,9 @@ const PlayerCommandProfile& commandProfile(PlayerProfileCli profile)
         "RJ\r",
         "1KL\r",
         "0KL\r",
+        "1DS\r",
+        "0DS\r",
+        "TM",
         5,
     };
 
@@ -299,14 +311,20 @@ bool PlayerSerial::setKeyLock(bool locked)
     return responseOk(commandResponse(locked ? profile.keyLock : profile.keyUnlock, NormalTimeoutMs));
 }
 
+bool PlayerSerial::setOnScreenDisplay(bool enabled)
+{
+    const auto& profile = commandProfile(currentProfile);
+    return responseOk(commandResponse(enabled ? profile.onScreenDisplayOn : profile.onScreenDisplayOff, NormalTimeoutMs));
+}
+
 bool PlayerSerial::setPositionFrame(int address)
 {
     return responseOk(commandResponse("FR" + std::to_string(address) + "SE\r", LongTimeoutMs));
 }
 
-bool PlayerSerial::setPositionTimeCode(int address)
+std::string playerTimeCodeSeekCommand(PlayerProfileCli profileId, int address)
 {
-    const auto& profile = commandProfile(currentProfile);
+    const auto& profile = commandProfile(profileId);
     int hours = address / 3600;
     int minutes = (address / 60) % 60;
     int seconds = address % 60;
@@ -322,7 +340,12 @@ bool PlayerSerial::setPositionTimeCode(int address)
         timeCode << hours << std::setw(2) << std::setfill('0') << minutes
                  << std::setw(2) << std::setfill('0') << seconds << "00";
     }
-    return responseOk(commandResponse("FR" + timeCode.str() + "SE\r", LongTimeoutMs));
+    return std::string(profile.timeCodeSeekPrefix) + timeCode.str() + "SE\r";
+}
+
+bool PlayerSerial::setPositionTimeCode(int address)
+{
+    return responseOk(commandResponse(playerTimeCodeSeekCommand(currentProfile, address), LongTimeoutMs));
 }
 
 std::string PlayerSerial::rawCommand(std::string command, int expectedResponseCount)
@@ -560,13 +583,25 @@ AddressResult parsePlayerTimeCodeResponse(std::string response)
     {
         if (allDigits(response))
         {
-            try
+            if (response.size() == 3)
             {
-                result.address = parseClvAddressSeconds(response);
+                int hours = response[0] - '0';
+                int minutes = std::stoi(response.substr(1, 2));
+                if (minutes < 60)
+                {
+                    result.address = (hours * 60 * 60) + (minutes * 60);
+                }
             }
-            catch (const std::exception&)
+            else
             {
-                result.address = -1;
+                try
+                {
+                    result.address = parseClvAddressSeconds(response);
+                }
+                catch (const std::exception&)
+                {
+                    result.address = -1;
+                }
             }
         }
     }

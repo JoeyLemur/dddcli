@@ -284,6 +284,7 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     else if (key == "auto_capture.start_address") options.startAddressText = stripQuotes(value);
     else if (key == "auto_capture.end_address") options.endAddressText = stripQuotes(value);
     else if (key == "auto_capture.key_lock") options.keyLock = parseBool(value);
+    else if (key == "auto_capture.on_screen_display") options.onScreenDisplay = parseBool(value);
     else throw std::runtime_error("unknown config key: " + key);
 }
 
@@ -353,6 +354,8 @@ ParsedCommandLine parseCommandLineImpl(int argc, char* argv[], const CliOptions&
         else if (arg == "--start-address") parsed.options.startAddressText = requireValue(i, argc, argv, arg);
         else if (arg == "--end-address") parsed.options.endAddressText = requireValue(i, argc, argv, arg);
         else if (arg == "--key-lock") parsed.options.keyLock = true;
+        else if (arg == "--on-screen-display") parsed.options.onScreenDisplay = true;
+        else if (arg == "--no-on-screen-display") parsed.options.onScreenDisplay = false;
         else throw std::runtime_error("unknown option: " + arg);
     }
     applyAddressFields(parsed.options);
@@ -497,11 +500,13 @@ AutoCaptureEndAddress resolveAutoCaptureEndAddress(
     if (mode == AutoCaptureModeCli::WholeDisc)
     {
         result.endAddress = discEndAddress;
+        result.usesDetectedDiscEnd = true;
         return result;
     }
 
     result.endAddress = requestedEndAddress > 0 ? std::min(requestedEndAddress, discEndAddress) : discEndAddress;
     result.cappedToDiscEnd = requestedEndAddress > discEndAddress;
+    result.usesDetectedDiscEnd = requestedEndAddress <= 0 || result.cappedToDiscEnd;
     if (mode == AutoCaptureModeCli::Partial && result.endAddress <= startAddress)
     {
         result.validRange = false;
@@ -509,12 +514,22 @@ AutoCaptureEndAddress resolveAutoCaptureEndAddress(
     return result;
 }
 
+std::chrono::milliseconds clvEndAddressPostRoll(const AutoCaptureEndAddress& resolvedEnd, int discEndAddress)
+{
+    if (resolvedEnd.usesDetectedDiscEnd && discEndAddress >= 0 && discEndAddress % 60 == 0)
+    {
+        return ClvMinuteAddressPostRoll;
+    }
+    return ClvSecondAddressPostRoll;
+}
+
 bool shouldStopAutoCaptureAtAddress(
     DiscTypeCli discType,
     int address,
     int endAddress,
     const std::chrono::steady_clock::time_point& now,
-    AutoCaptureStopState& state)
+    AutoCaptureStopState& state,
+    std::chrono::milliseconds clvEndAddressPostRoll)
 {
     if (discType != DiscTypeCli::Clv)
     {
@@ -537,7 +552,6 @@ bool shouldStopAutoCaptureAtAddress(
         return false;
     }
 
-    constexpr auto clvEndAddressPostRoll = std::chrono::milliseconds(1500);
     return now - state.clvPostRollStart >= clvEndAddressPostRoll;
 }
 
@@ -554,6 +568,20 @@ bool shouldStopAutoCaptureForPlayerState(
     return playerState == PlayerStateCli::Stop ||
         playerState == PlayerStateCli::Pause ||
         playerState == PlayerStateCli::StillFrame;
+}
+
+bool shouldStopAutoCaptureOnClvWrap(
+    int lastAddress,
+    int address,
+    int endAddress)
+{
+    if (lastAddress < 0 || address < 0 || address >= lastAddress)
+    {
+        return false;
+    }
+
+    constexpr int ClvEndWrapWindowSeconds = 120;
+    return endAddress - lastAddress <= ClvEndWrapWindowSeconds;
 }
 
 void validateAutoCaptureOptions(const ParsedCommandLine& parsed)
@@ -689,5 +717,6 @@ void printUsage()
         "  --disc-type cav|clv              required for auto-capture\n"
         "  --mode whole-disc|lead-in|partial\n"
         "  --start-address <n> --end-address <n>\n"
-        "  --key-lock\n";
+        "  --key-lock\n"
+        "  --on-screen-display | --no-on-screen-display\n";
 }

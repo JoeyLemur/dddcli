@@ -1,18 +1,26 @@
 # Auto Capture
 
-`auto-capture` coordinates USB capture with a serial-controlled LaserDisc player. It verifies the requested disc type, probes the disc end address, positions the player, starts USB capture, starts playback, monitors the player address, then stops capture and writes metadata.
+`auto-capture` coordinates USB capture with a serial-controlled LaserDisc player. It verifies the requested disc type, positions the player, starts USB capture, starts playback, monitors the player address, then stops capture and writes metadata. Whole-disc and lead-in captures also probe the disc end address during setup.
 
 ## Modes
 
 - `whole-disc`: capture from spin-down/lead-in to the detected end address.
 - `lead-in`: capture from spin-down/lead-in to the requested or detected end address.
-- `partial`: seek to `--start-address` and capture until `--end-address`, unless the detected disc end is earlier.
+- `partial`: seek to `--start-address` and capture until `--end-address`.
 
 `partial` requires `--end-address`, and the normalized end address must be greater than the start address.
 
-For `whole-disc`, the detected disc end is always used. For `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. For `partial`, an end address beyond the detected disc end is capped with a warning, but the capture still fails if the start address is at or beyond the detected disc end. To detect the end address, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
+For `whole-disc`, the detected disc end is always used. For `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. `partial` uses the requested `--end-address` directly and does not perform the disc-end probe. To detect the end address for whole-disc and lead-in modes, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
 
 Whole-disc CLV capture starts from spin-down/lead-in and stops at the detected player-reported end timecode. It does not require the first playable CLV timecode to be `0:00:00`; a disc that begins at a later displayed timecode is still tracked by the actual addresses returned by the player.
+
+For `whole-disc` and `lead-in`, setup verifies the player is stopped immediately before USB capture starts. If disc probing or earlier manual use left the player spun up, paused, or playing, the CLI sends stop first so RF capture begins before the next spin-up/play command. `partial` captures seek to the requested start address and begin capture from that positioned playback point instead.
+
+Auto-capture turns the player's on-screen display on by default with `1DS` before positioning and playback. Use `--no-on-screen-display` or `[auto_capture] on_screen_display = false` to send `0DS` instead when you want the player display disabled during capture.
+
+Some older CLV discs only expose hour/minute timecode precision. If the detected CLV disc end lands exactly on a minute boundary and the capture range uses that detected end, the CLI treats the end as possibly minute-granular and uses a 60 second end post-roll instead of the normal second-granular post-roll. This avoids cutting off most of the final minute; the capture can still finish earlier if the player stops, pauses, or still-frames during that post-roll.
+
+If a CLV capture reaches the end of its requested range and the player rolls over to an earlier timecode instead of stopping, the CLI treats that wraparound as the end of the range and stops capture.
 
 ## Disc Type
 
@@ -61,9 +69,11 @@ All CLV forms normalize to seconds from the displayed player timecode. `754`, `0
 
 These CLV values are absolute player timecodes, not offsets relative to the first playable timecode on a particular disc. For example, if a disc starts at displayed timecode `0:05:00`, use `00500` or `300` to refer to that point in `partial` or `lead-in` ranges.
 
+When reading player responses, the CLI also accepts compact `HMM`, such as `012`, from minute-only CLV timecodes and normalizes it to the first second of that displayed minute. User-supplied values below five digits are treated as seconds.
+
 ## Metadata
 
-Auto-capture metadata includes player model, player version, serial speed, disc type, disc status, and observed address bounds from the active capture loop. Disc-end probe addresses are not included in the captured min/max fields.
+Auto-capture metadata includes player model, player version, serial speed, disc type, disc status, and observed address bounds from the active capture loop. Disc-end probe addresses are not included in the captured min/max fields. If a near-end CLV wrap triggers capture completion, the wrapped restart address is also excluded from the min/max range.
 
 The sidecar always includes a `captureInfo` object with the capture file path, capture format, test-mode flag, transfer result, duration, transfer and buffer counts, file size, sample statistics, clipping statistics, sequence marker presence, and UTC creation timestamp.
 
@@ -77,7 +87,7 @@ For CLV captures:
 - `minTimeCode`
 - `maxTimeCode`
 
-CLV metadata values are normalized seconds from the displayed player timecode, not raw compact `HMMSS` or `HMMSSFF` strings.
+CLV metadata values are normalized seconds from the displayed player timecode, not raw compact `HMM`, `HMMSS`, or `HMMSSFF` strings. The precision reflects the values reported by the player, so minute-only CLV discs may record `minTimeCode` and `maxTimeCode` on minute boundaries.
 
 ## Cleanup
 
@@ -86,8 +96,7 @@ The auto-capture path is designed to clean up on success, capture errors, and in
 - USB transfer is stopped if still running.
 - key lock is released if it was enabled. If requested key lock cannot be enabled, capture aborts before USB capture starts.
 - setup interruptions before USB capture starts abort without starting playback.
-- CAV captures end by stopping the player.
-- CLV captures end by pausing the player.
+- successful CAV and CLV captures end by stopping the player.
 - auto-capture address errors leave the player in still-frame for inspection.
 - CAV still-frame resume failures stop capture and leave the player in still-frame for inspection.
 - `SIGINT` and `SIGTERM` request an orderly stop; capture cleanup still runs before the process exits.

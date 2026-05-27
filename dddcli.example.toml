@@ -35,3 +35,4 @@ mode = "partial"
 start_address = "60"
 end_address = "90"
 key_lock = false
+on_screen_display = true

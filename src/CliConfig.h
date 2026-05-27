@@ -88,6 +88,7 @@ struct CliOptions
     std::string startAddressText;
     std::string endAddressText;
     bool keyLock = false;
+    bool onScreenDisplay = true;
 };
 
 struct ParsedCommandLine
@@ -108,8 +109,12 @@ struct AutoCaptureEndAddress
 {
     int endAddress = 0;
     bool cappedToDiscEnd = false;
+    bool usesDetectedDiscEnd = false;
     bool validRange = true;
 };
+
+inline constexpr auto ClvSecondAddressPostRoll = std::chrono::milliseconds(1500);
+inline constexpr auto ClvMinuteAddressPostRoll = std::chrono::seconds(60);
 
 class TomlConfig
 {
@@ -133,16 +138,22 @@ AutoCaptureEndAddress resolveAutoCaptureEndAddress(
     int requestedEndAddress,
     int startAddress,
     int discEndAddress);
+std::chrono::milliseconds clvEndAddressPostRoll(const AutoCaptureEndAddress& resolvedEnd, int discEndAddress);
 bool shouldStopAutoCaptureAtAddress(
     DiscTypeCli discType,
     int address,
     int endAddress,
     const std::chrono::steady_clock::time_point& now,
-    AutoCaptureStopState& state);
+    AutoCaptureStopState& state,
+    std::chrono::milliseconds clvEndAddressPostRoll = ClvSecondAddressPostRoll);
 bool shouldStopAutoCaptureForPlayerState(
     DiscTypeCli discType,
     const AutoCaptureStopState& state,
     PlayerStateCli playerState);
+bool shouldStopAutoCaptureOnClvWrap(
+    int lastAddress,
+    int address,
+    int endAddress);
 void validateAutoCaptureOptions(const ParsedCommandLine& parsed);
 std::string playerProfileToString(PlayerProfileCli profile);
 std::string transferResultToString(UsbDeviceBase::TransferResult result);

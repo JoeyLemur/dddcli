@@ -40,12 +40,14 @@ Linux capture hosts should provide enough USBFS and locked-memory headroom for t
 ```sh
 cat /sys/module/usbcore/parameters/usbfs_memory_mb
 ulimit -l
+ulimit -r
 ```
 
 Expected:
 
 - `usbfs_memory_mb` is at least `512`
 - `ulimit -l` is at least `524288` KiB, or `unlimited`
+- `ulimit -r` is high enough for realtime capture priority, such as `80` or higher
 
 To set the USBFS memory pool temporarily until reboot:
 
@@ -66,9 +68,15 @@ captureuser soft memlock 524288
 captureuser hard memlock 524288
 @domesday soft memlock 524288
 @domesday hard memlock 524288
+captureuser soft rtprio 80
+captureuser hard rtprio 80
+@domesday soft rtprio 80
+@domesday hard rtprio 80
 ```
 
-Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their old limits, so start a fresh login session before re-checking. For a systemd service, set `LimitMEMLOCK=512M` in the service unit.
+Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their old limits, so start a fresh login session before re-checking. For a systemd service, set `LimitMEMLOCK=512M` and `LimitRTPRIO=80` in the service unit.
+
+If capture prints `warning: SetCurrentThreadRealtimePriority: Unable to set thread priority`, the process did not receive realtime scheduling permission. Capture can continue, but configuring `rtprio` removes that warning and gives the capture threads better scheduler priority.
 
 - Confirm the serial device exists and the user can access it:
 
@@ -125,7 +133,7 @@ Capture raw responses for commands used by the profiles:
 ./build/dddcli player raw-command '$Y' --serial-device /dev/ttyUSB0
 ```
 
-Record the escaped output exactly. Especially note whether CLV `?T` returns 5 digits (`HMMSS`) or 7 digits (`HMMSSFF`) on each player.
+Record the escaped output exactly. Especially note whether CLV `?T` returns 3 digits (`HMM`), 5 digits (`HMMSS`), or 7 digits (`HMMSSFF`) on each player.
 
 With no disc loaded, address/user-code requests may return an error response such as `E04\r`; record that as the no-disc baseline rather than treating it as a CLI failure if the command exits successfully.
 
@@ -159,7 +167,8 @@ Use a CLV disc.
 
 Expected:
 
-- LD-V2200: 5-digit `HMMSS` is acceptable and should normalize to elapsed seconds internally.
+- Minute-only CLV discs: 3-digit `HMM` is acceptable and should normalize to the first second of that displayed minute.
+- LD-V2200: 5-digit `HMMSS` is acceptable and should normalize to seconds internally.
 - LD-V4300D/generic: 5-digit `HMMSS` or 7-digit `HMMSSFF` is acceptable.
 - Lead-in/lead-out markers `<` and `>` should be preserved in raw output and tolerated by parsing.
 
@@ -181,7 +190,7 @@ Expected:
 - player seeks near 1 minute
 - capture continues through second 90 and stops after the player reports second 91, after the CLV 1.5 second post-roll fallback, or cleanly if the player stops/pauses/still-frames during post-roll
 - JSON `minTimeCode` and `maxTimeCode` are normalized seconds, not raw compact timecode
-- JSON `maxTimeCode` reflects addresses seen during capture and does not include the earlier disc-end probe
+- JSON `maxTimeCode` reflects addresses seen during capture; partial mode does not perform a disc-end probe
 
 Repeat compact input forms:
 
@@ -191,6 +200,62 @@ Repeat compact input forms:
 ```
 
 Expected: both runs behave like 60-to-90 second captures.
+
+### Normal CLV Disc End Handling
+
+With a CLV disc that reports normal second-granular timecodes, run a whole-disc capture. Use the shortest suitable test disc if capture time or storage is limited, but keep `--mode whole-disc` so the disc-end probe and detected-end stop path are exercised.
+
+```sh
+./build/dddcli auto-capture \
+  --serial-device /dev/ttyUSB0 \
+  --disc-type clv \
+  --mode whole-disc \
+  --output /tmp/dddcli-clv-whole-disc.lds \
+  --json /tmp/dddcli-clv-whole-disc.json
+```
+
+If stderr is piped through `tee` for logging, progress is emitted as newline status about every 10 seconds. CLV auto-capture progress includes `timecode=H:MM:SS` after the first address is read.
+
+Expected:
+
+- player probes the CLV end, spins down, then captures from lead-in/playback start
+- capture reaches the detected end timecode and does not stop before the final reported second
+- capture stops after the player reports the next second, after the CLV 1.5 second post-roll fallback, or cleanly if the player stops/pauses/still-frames during post-roll
+- if the player restarts from the beginning at end-of-disc, capture stops when the near-end timecode wraps back to an earlier timecode
+- a near-end partial CLV capture with `--end-address` close to the physical end stops cleanly if the player wraps
+- final player cleanup stops the CLV disc
+- JSON `minTimeCode` and `maxTimeCode` reflect addresses seen during capture and do not include the earlier disc-end probe
+
+### Minute-Only CLV Disc End Handling
+
+When a CLV disc with hour/minute-only timecodes is available, run this test in addition to the short partial capture above. Use scratch storage with enough free space for a full CLV capture.
+
+First confirm the player reports minute-only timecodes:
+
+```sh
+./build/dddcli player raw-command '?T' --serial-device /dev/ttyUSB0
+```
+
+Expected: the raw response uses 3-digit `HMM` timecodes, optionally with `<` or `>` lead-in/lead-out markers. Record several responses during playback near the end of the disc if possible.
+
+Then run a whole-disc CLV auto-capture:
+
+```sh
+./build/dddcli auto-capture \
+  --serial-device /dev/ttyUSB0 \
+  --disc-type clv \
+  --mode whole-disc \
+  --output /tmp/dddcli-clv-minute-only.lds \
+  --json /tmp/dddcli-clv-minute-only.json
+```
+
+Expected:
+
+- stderr reports `Detected minute-aligned CLV disc end; using 60 second end post-roll`
+- capture does not stop immediately when the final reported minute is first reached
+- capture continues through the final minute, or ends cleanly earlier only if the player reports `Stop`, `Pause`, or `StillFrame`
+- JSON `maxTimeCode` is on a minute boundary for the minute-only reported address
+- JSON `maxTimeCode` reflects addresses seen during capture and does not include the earlier disc-end probe
 
 ## 6. CAV Frame Behavior
 
@@ -221,6 +286,27 @@ Expected:
 - capture stops around frame 1300
 - JSON uses `minFrameNumber` and `maxFrameNumber`
 - JSON `maxFrameNumber` reflects frames seen during capture and does not include the earlier disc-end probe
+
+### CAV Disc End Handling
+
+Run a whole-disc CAV auto-capture. Use the shortest suitable test disc if capture time or storage is limited, but keep `--mode whole-disc` so the frame `60000` disc-end probe and detected-end stop path are exercised.
+
+```sh
+./build/dddcli auto-capture \
+  --serial-device /dev/ttyUSB0 \
+  --disc-type cav \
+  --mode whole-disc \
+  --output /tmp/dddcli-cav-whole-disc.lds \
+  --json /tmp/dddcli-cav-whole-disc.json
+```
+
+Expected:
+
+- player probes the CAV end, spins down, then captures from lead-in/playback start
+- capture reaches the detected final frame and does not stop before that frame
+- capture stops when the reported frame is at or beyond the detected end frame
+- final player cleanup stops the CAV disc
+- JSON `minFrameNumber` and `maxFrameNumber` reflect frames seen during capture and do not include the earlier frame `60000` disc-end probe
 
 ## 7. Key Lock And Cleanup
 

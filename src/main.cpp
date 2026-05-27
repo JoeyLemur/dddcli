@@ -9,8 +9,10 @@
 #include <chrono>
 #include <csignal>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <thread>
 
 namespace
@@ -41,6 +43,40 @@ CaptureProgressSnapshot makeCaptureProgressSnapshot(UsbDeviceBase& usb, const st
         static_cast<uint64_t>(usb.GetNumberOfTransfers()),
         static_cast<uint64_t>(usb.GetProcessedSampleCount())
     };
+}
+
+std::string formatClvProgressTimeCode(int seconds)
+{
+    int hours = seconds / 3600;
+    int minutes = (seconds / 60) % 60;
+    int remainingSeconds = seconds % 60;
+
+    std::ostringstream stream;
+    stream << hours << ':'
+           << std::setw(2) << std::setfill('0') << minutes << ':'
+           << std::setw(2) << std::setfill('0') << remainingSeconds;
+    return stream.str();
+}
+
+CaptureProgressSnapshot makeAutoCaptureProgressSnapshot(
+    UsbDeviceBase& usb,
+    const std::chrono::steady_clock::time_point& start,
+    DiscTypeCli discType,
+    int address)
+{
+    auto snapshot = makeCaptureProgressSnapshot(usb, start);
+    if (address >= 0)
+    {
+        if (discType == DiscTypeCli::Cav)
+        {
+            snapshot.playerPosition = "frame=" + std::to_string(address);
+        }
+        else if (discType == DiscTypeCli::Clv)
+        {
+            snapshot.playerPosition = "timecode=" + formatClvProgressTimeCode(address);
+        }
+    }
+    return snapshot;
 }
 
 bool startCapture(UsbDeviceBase& usb, const CliOptions& options, const std::filesystem::path& outputPath)
@@ -374,6 +410,17 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         }
     }
 
+    if (!player.setOnScreenDisplay(options.onScreenDisplay))
+    {
+        std::cerr << "Could not " << (options.onScreenDisplay ? "enable" : "disable")
+                  << " player on-screen display\n";
+        return 1;
+    }
+    if (stopDuringSetup())
+    {
+        return 1;
+    }
+
     PlayerStateCli state = player.getPlayerState();
     if (stopDuringSetup())
     {
@@ -410,8 +457,9 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         return 1;
     }
 
-    int discEnd = 0;
-    if (options.discType == DiscTypeCli::Cav)
+    int discEnd = -1;
+    bool needsDiscEndProbe = options.autoCaptureMode != AutoCaptureModeCli::Partial;
+    if (needsDiscEndProbe && options.discType == DiscTypeCli::Cav)
     {
         if (!player.setPositionFrame(60000))
         {
@@ -429,7 +477,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             return 1;
         }
     }
-    else
+    else if (needsDiscEndProbe)
     {
         constexpr int latestClvAddressToProbeSeconds = (1 * 60 * 60) + (59 * 60) + 59;
         if (!player.setPositionTimeCode(latestClvAddressToProbeSeconds))
@@ -437,7 +485,19 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             std::cerr << "Could not determine CLV disc length\n";
             return 1;
         }
-        discEnd = player.getCurrentTimeCode().address;
+        constexpr int maxDiscEndReadAttempts = 5;
+        for (int attempt = 0; attempt < maxDiscEndReadAttempts && discEnd < 0; ++attempt)
+        {
+            if (attempt > 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+            discEnd = player.getCurrentTimeCode().address;
+            if (stopDuringSetup())
+            {
+                return 1;
+            }
+        }
         if (discEnd < 0)
         {
             std::cerr << "Could not determine CLV disc length\n";
@@ -449,11 +509,20 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         }
     }
 
-    auto resolvedEnd = resolveAutoCaptureEndAddress(
-        options.autoCaptureMode,
-        options.endAddress,
-        options.startAddress,
-        discEnd);
+    AutoCaptureEndAddress resolvedEnd;
+    if (needsDiscEndProbe)
+    {
+        resolvedEnd = resolveAutoCaptureEndAddress(
+            options.autoCaptureMode,
+            options.endAddress,
+            options.startAddress,
+            discEnd);
+    }
+    else
+    {
+        resolvedEnd.endAddress = options.endAddress;
+        resolvedEnd.validRange = options.endAddress > options.startAddress;
+    }
     if (!resolvedEnd.validRange)
     {
         std::cerr << "partial auto-capture start address is at or beyond detected disc end\n";
@@ -466,11 +535,26 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                   << "; capturing to detected disc end\n";
     }
     int endAddress = resolvedEnd.endAddress;
+    auto clvPostRoll = clvEndAddressPostRoll(resolvedEnd, discEnd);
+    if (options.discType == DiscTypeCli::Clv && clvPostRoll == ClvMinuteAddressPostRoll && !options.quiet)
+    {
+        std::cerr << "Detected minute-aligned CLV disc end; using 60 second end post-roll\n";
+    }
 
     bool captureFromLeadIn = options.autoCaptureMode == AutoCaptureModeCli::WholeDisc || options.autoCaptureMode == AutoCaptureModeCli::LeadIn;
     if (captureFromLeadIn)
     {
-        if (!player.setPlayerState(PlayerStateCli::Stop))
+        auto preCaptureState = player.getPlayerState();
+        if (stopDuringSetup())
+        {
+            return 1;
+        }
+        if (preCaptureState == PlayerStateCli::Unknown)
+        {
+            std::cerr << "The player's state could not be determined before spin-down\n";
+            return 1;
+        }
+        if (preCaptureState != PlayerStateCli::Stop && !player.setPlayerState(PlayerStateCli::Stop))
         {
             std::cerr << "Could not spin-down disc\n";
             return 1;
@@ -574,8 +658,20 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         if (address >= 0)
         {
             consecutiveAddressReadFailures = 0;
+            if (options.discType == DiscTypeCli::Clv &&
+                shouldStopAutoCaptureOnClvWrap(lastAddress, address, endAddress))
+            {
+                if (!options.quiet)
+                {
+                    progress.clear();
+                    std::cerr << "CLV time code wrapped from " << lastAddress
+                              << " to " << address
+                              << " near requested end; stopping capture\n";
+                }
+                break;
+            }
             recordAutoCaptureAddress(metadata, options.discType, address);
-            if (shouldStopAutoCaptureAtAddress(options.discType, address, endAddress, now, stopState))
+            if (shouldStopAutoCaptureAtAddress(options.discType, address, endAddress, now, stopState, clvPostRoll))
             {
                 break;
             }
@@ -628,7 +724,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             }
         }
 
-        progress.update(makeCaptureProgressSnapshot(usb, start));
+        progress.update(makeAutoCaptureProgressSnapshot(usb, start, options.discType, lastAddress));
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 

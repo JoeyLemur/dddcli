@@ -90,19 +90,23 @@ All three mean 12 minutes and 34 seconds.
 
 These values are absolute displayed timecodes from the player. Whole-disc CLV auto-capture does not require the disc to begin at `0:00:00`, but manually supplied `--start-address` and `--end-address` values should match the disc's displayed timecodes rather than offsets from the first playable code.
 
+Some older CLV discs only expose hour/minute precision. If whole-disc capture detects an end timecode on an exact minute boundary, the CLI waits up to 60 seconds after first seeing that end address so it does not drop the rest of the final minute. It still stops early if the player reaches a terminal state during that post-roll.
+
 For raw hardware evidence, query:
 
 ```sh
 ./build/dddcli player raw-command '?T' --serial-device /dev/ttyUSB0
 ```
 
-Record whether the response is 5-digit `HMMSS`, 7-digit `HMMSSFF`, or has lead-in/lead-out markers.
+Record whether the response is 3-digit `HMM`, 5-digit `HMMSS`, 7-digit `HMMSSFF`, or has lead-in/lead-out markers.
 
 ## Auto-Capture Stops Late Or Early
 
 CAV stops at the requested frame once the player reports that frame or later.
 
 CLV intentionally captures past the first report of the requested end second. It stops after the player advances to the next second, after a 1.5 second post-roll timeout, or cleanly if the player stops/pauses/still-frames during that post-roll.
+
+For CLV captures, a wrap from a near-end timecode back to an earlier timecode is treated as the end of the requested range. This prevents players that restart from the beginning at end-of-disc from continuing capture indefinitely, and also lets a near-end partial capture finish cleanly if it reaches the physical end.
 
 If auto-capture fails with address-read errors:
 
@@ -125,18 +129,24 @@ Capture files can be large. If capture fails after starting:
 
 If `--json` points to a path in a missing directory, the CLI creates that directory before writing the sidecar.
 
+## Capture Progress In Logs
+
+When stderr is attached to a terminal, capture progress is shown as a single updating line. When stderr is redirected or piped through a command such as `tee`, progress is written as newline-delimited status about every 10 seconds so long captures still leave useful log evidence. Auto-capture progress also includes the current player position as `timecode=H:MM:SS` for CLV or `frame=<n>` for CAV after the first address is read. `--quiet` suppresses both forms of progress output.
+
 ### Linux Capture Host Tuning
 
 The default capture queue needs enough kernel USBFS memory for libusb transfers and enough locked-memory allowance for capture buffers. Use these capture-host defaults:
 
 - `usbcore.usbfs_memory_mb=512`
 - `memlock=524288` KiB, or `unlimited`
+- `rtprio=80` or higher, so capture threads can request realtime priority
 
 Check the active values:
 
 ```sh
 cat /sys/module/usbcore/parameters/usbfs_memory_mb
 ulimit -l
+ulimit -r
 ```
 
 Set USBFS memory until reboot:
@@ -160,9 +170,21 @@ captureuser soft memlock 524288
 captureuser hard memlock 524288
 @domesday soft memlock 524288
 @domesday hard memlock 524288
+captureuser soft rtprio 80
+captureuser hard rtprio 80
+@domesday soft rtprio 80
+@domesday hard rtprio 80
 ```
 
-Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their inherited limits, so start a fresh login session before re-checking `ulimit -l`. If a desktop-launched app does not inherit the configured limit, launch it from a fresh login shell or configure its launcher/service limit explicitly. For a systemd service, set `LimitMEMLOCK=512M` in the service unit.
+Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their inherited limits, so start a fresh login session before re-checking `ulimit -l` and `ulimit -r`. If a desktop-launched app does not inherit the configured limit, launch it from a fresh login shell or configure its launcher/service limit explicitly. For a systemd service, set `LimitMEMLOCK=512M` and `LimitRTPRIO=80` in the service unit.
+
+If capture prints:
+
+```text
+warning: SetCurrentThreadRealtimePriority: Unable to set thread priority
+```
+
+the process could not raise its thread scheduler priority. The capture may still complete, but configuring `rtprio` for the capture user or service removes the warning and gives capture threads better scheduling behavior.
 
 ## What To Record For Bugs
 

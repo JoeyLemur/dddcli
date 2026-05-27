@@ -30,5 +30,5 @@ AutoCaptureFinalPlayerAction finalPlayerActionForAutoCapture(DiscTypeCli discTyp
     {
         return AutoCaptureFinalPlayerAction::StillFrame;
     }
-    return discType == DiscTypeCli::Cav ? AutoCaptureFinalPlayerAction::Stop : AutoCaptureFinalPlayerAction::Pause;
+    return AutoCaptureFinalPlayerAction::Stop;
 }

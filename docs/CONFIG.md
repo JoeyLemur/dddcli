@@ -50,6 +50,7 @@ mode = "partial"
 start_address = "60"
 end_address = "90"
 key_lock = false
+on_screen_display = true
 ```
 
 ## CLI Options
@@ -91,6 +92,7 @@ Auto-capture options:
 - `--mode whole-disc|lead-in|partial`: capture range mode.
 - `--start-address <n>` and `--end-address <n>`: frame address for CAV, normalized seconds or compact timecode for CLV. Partial auto-capture requires the normalized end address to be greater than the start address.
 - `--key-lock`: key-lock the player during capture and release it during cleanup. If the player cannot enable key lock, auto-capture aborts before capture starts.
+- `--on-screen-display` / `--no-on-screen-display`: turn the player's on-screen display on or off during auto-capture setup. The default is on.
 
 ## Config Keys
 
@@ -115,6 +117,7 @@ The supported config keys are:
 - `[auto_capture] start_address`
 - `[auto_capture] end_address`
 - `[auto_capture] key_lock`
+- `[auto_capture] on_screen_display`
 
 There is currently no config key for `--output`, `--debug`, `--quiet`, or the `--large-*` CLI convenience toggles. Set the matching boolean keys to `false` for large/default USB transfer behavior.
 
@@ -129,6 +132,7 @@ Defaults:
 - serial speed: `auto`
 - player profile: `auto`
 - auto-capture mode: `whole-disc`
+- auto-capture on-screen display: enabled
 - USB transfers: small transfers enabled, reduced transfer queue disabled
 
 The command line and config parser accept the canonical values shown above plus a few compatibility aliases:
@@ -152,3 +156,5 @@ For `--start-address`, `--end-address`, and config addresses:
 For example, `754`, `01234`, and `0123400` all refer to 12 minutes and 34 seconds.
 
 CLV addresses are absolute displayed timecodes from the player, not offsets relative to the first playable timecode on a disc. Whole-disc auto-capture starts from spin-down/lead-in and can handle CLV discs that do not begin at `0:00:00`; for `partial` or `lead-in` ranges, supply the actual displayed timecodes you want to target.
+
+When reading player responses, the CLI also accepts compact `HMM` from minute-only CLV timecodes and normalizes it to the first second of that minute. If a detected CLV disc end lands exactly on a minute boundary, auto-capture uses a longer end post-roll so whole-disc captures do not lose the rest of the final minute.
