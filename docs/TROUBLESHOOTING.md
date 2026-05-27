@@ -38,6 +38,40 @@ If no devices are found:
 
 The defaults are VID `0x1D50` and PID `0x603B`. When no matching devices are visible, `list-devices` prints `No Domesday Duplicator USB devices found` and exits non-zero.
 
+On Linux, install a late udev rule such as `/etc/udev/rules.d/99-domesday.rules` for non-root capture access:
+
+```text
+SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="603b", MODE="0666"
+```
+
+Use `ATTR{...}` for `idVendor` and `idProduct` because those attributes live on the USB device node itself. `ATTRS{...}` walks parent devices and may fail to match. Use a late filename such as `99-domesday.rules` because the system default USB rule commonly runs around `50-udev-default.rules` and sets USB device nodes to `0664 root:root`; an earlier custom rule can be overwritten and still produce `LIBUSB_ERROR_ACCESS` after reboot.
+
+Reload and apply the rule:
+
+```sh
+sudo udevadm control --reload-rules
+sudo udevadm trigger --action=change --subsystem-match=usb --attr-match=idVendor=1d50 --attr-match=idProduct=603b
+```
+
+Then verify the current device node is writable by the capture user:
+
+```sh
+dddcli list-devices
+udevadm info --query=property --path=/sys/bus/usb/devices/4-1
+ls -l /dev/bus/usb/004/002
+udevadm test /sys/bus/usb/devices/4-1
+```
+
+Adjust the `4-1` sysfs path and `/dev/bus/usb/...` node to match `list-devices` and the `BUSNUM`/`DEVNUM` shown by `udevadm`. In `udevadm test`, confirm the default USB rule sets `MODE 0664` first and `99-domesday.rules` sets `MODE 0666` afterward.
+
+If the Duplicator only appears after a manual poke or unplug/replug, first check whether the kernel saw it during boot:
+
+```sh
+sudo journalctl -b -k --no-pager | grep -Ei '1d50|603b|Domesday|usb [0-9]+-[0-9]+'
+```
+
+If the boot log shows `idVendor=1d50, idProduct=603b`, the hardware enumerated and the likely permanent fix is the late udev rule above. If the boot log does not show the Duplicator at all, investigate USB power, cable/port, hub behavior, firmware startup timing, or xHCI/controller quirks before chasing permissions.
+
 ## Player Does Not Connect
 
 Start with:
@@ -161,7 +195,13 @@ Make USBFS memory persistent with `/etc/modprobe.d/usbcore.conf`:
 options usbcore usbfs_memory_mb=512
 ```
 
-Some systems need the initramfs rebuilt or `usbcore.usbfs_memory_mb=512` added to the kernel command line before this persistent setting takes effect.
+Some systems load `usbcore` from the initramfs before the real root filesystem's `/etc/modprobe.d` is available. If `cat /sys/module/usbcore/parameters/usbfs_memory_mb` is still `16` after reboot, rebuild the active initramfs after adding the modprobe file. On Debian/Ubuntu-style systems:
+
+```sh
+sudo update-initramfs -u
+```
+
+Reboot and re-check the runtime value. If the value is still not `512`, add `usbcore.usbfs_memory_mb=512` to the kernel command line instead.
 
 For a PAM-login shell, raise `memlock` for the capture user or group with `/etc/security/limits.d/domesday.conf`:
 

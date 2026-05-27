@@ -16,6 +16,16 @@ ctest --test-dir build --output-on-failure
 
 Software tests do not require USB or serial hardware.
 
+## Linux Host Setup
+
+For reliable non-root capture on Linux, the Domesday Duplicator USB device should have a late udev rule such as `/etc/udev/rules.d/99-domesday.rules`:
+
+```text
+SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="603b", MODE="0666"
+```
+
+The rule must use `ATTR{...}` and run after the default USB rules so the final `/dev/bus/usb/...` node is writable by the capture user. The default capture queue also expects `usbcore.usbfs_memory_mb=512`; if that is set through `/etc/modprobe.d/usbcore.conf`, the active initramfs may need to be rebuilt before the value survives reboot. See [Troubleshooting](docs/TROUBLESHOOTING.md) for the full checks.
+
 ## Basic Usage
 
 List connected Domesday Duplicator USB devices:

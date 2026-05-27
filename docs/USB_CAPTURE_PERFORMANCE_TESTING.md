@@ -39,6 +39,7 @@ Confirm the DdD device is visible and negotiated as USB 3 SuperSpeed.
 ./build-perf/dddcli list-devices
 cat /sys/bus/usb/devices/<device-suffix>/speed
 cat /sys/bus/usb/devices/<device-suffix>/version
+udevadm info --query=property --path=/sys/bus/usb/devices/<device-suffix>
 ```
 
 Expected:
@@ -46,6 +47,7 @@ Expected:
 - device path is reported by `list-devices`
 - speed is `5000`
 - version is `3.00` or newer
+- the matching `/dev/bus/usb/...` node is writable by the capture user
 
 Confirm kernel USBFS and locked-memory headroom.
 
@@ -60,6 +62,14 @@ Expected:
 - `usbfs_memory_mb` is at least `512`
 - `ulimit -l` is at least `524288` KiB, or `unlimited`
 - `ulimit -r` is `80` or higher if validating realtime capture priority
+
+If the persistent USBFS setting was added through `/etc/modprobe.d/usbcore.conf`, rebuild the active initramfs when `usbcore` is loaded early during boot. On Debian/Ubuntu-style systems:
+
+```sh
+sudo update-initramfs -u
+```
+
+Reboot and confirm `cat /sys/module/usbcore/parameters/usbfs_memory_mb` reports `512`. If it does not, use the kernel command line parameter `usbcore.usbfs_memory_mb=512`.
 
 Record storage and filesystem details for the output path:
 

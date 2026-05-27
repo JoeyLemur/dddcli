@@ -29,9 +29,18 @@ If a device path is reported, confirm it negotiated as USB 3 SuperSpeed. Replace
 ```sh
 cat /sys/bus/usb/devices/4-1/speed
 cat /sys/bus/usb/devices/4-1/version
+udevadm info --query=property --path=/sys/bus/usb/devices/4-1
 ```
 
 Expected: USB 3 SuperSpeed reports speed `5000` and version `3.00` or newer.
+
+On Linux, confirm the matching `/dev/bus/usb/...` node is writable by the capture user. Use `BUSNUM` and `DEVNUM` from `udevadm info`; for example, `BUSNUM=004` and `DEVNUM=002` correspond to `/dev/bus/usb/004/002`.
+
+```sh
+ls -l /dev/bus/usb/004/002
+```
+
+Expected: the node is writable by the capture user, for example `crw-rw-rw-` when using a late `/etc/udev/rules.d/99-domesday.rules` rule. If it is still `0664 root:root`, see `docs/TROUBLESHOOTING.md`.
 
 ### Linux Capture Host Tuning
 
@@ -60,6 +69,20 @@ To make the USBFS setting persistent, add a modprobe setting:
 ```sh
 echo 'options usbcore usbfs_memory_mb=512' | sudo tee /etc/modprobe.d/usbcore.conf
 ```
+
+If `usbcore` is loaded from the initramfs during boot, rebuild the active initramfs after adding the modprobe setting. On Debian/Ubuntu-style systems:
+
+```sh
+sudo update-initramfs -u
+```
+
+Then reboot and re-check:
+
+```sh
+cat /sys/module/usbcore/parameters/usbfs_memory_mb
+```
+
+If the value is still not `512`, add `usbcore.usbfs_memory_mb=512` to the kernel command line instead.
 
 To raise the locked-memory limit for a PAM-login shell, create a limits file such as `/etc/security/limits.d/domesday.conf`:
 
