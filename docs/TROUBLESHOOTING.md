@@ -184,7 +184,58 @@ If capture prints:
 warning: SetCurrentThreadRealtimePriority: Unable to set thread priority
 ```
 
-the process could not raise its thread scheduler priority. The capture may still complete, but configuring `rtprio` for the capture user or service removes the warning and gives capture threads better scheduling behavior.
+the process could not raise its capture threads to realtime scheduler priority. This does not mean the capture failed. It means the kernel kept the process at normal scheduling priority, so capture is more exposed to CPU scheduling delays while the USB transfer and disk writer threads are trying to keep up.
+
+Short captures may still complete successfully with this warning. For long captures, busy systems, slow disks, or machines doing other work, fix the realtime limit before treating the host as fully tuned.
+
+Check the active realtime priority limit in the same shell that will run `dddcli`:
+
+```sh
+ulimit -r
+```
+
+Expected: `80` or higher. If it reports `0`, the user cannot request realtime priority from that shell.
+
+For a normal PAM login session, add an `rtprio` limit for the capture user or a capture group in `/etc/security/limits.d/domesday.conf`:
+
+```text
+captureuser soft rtprio 80
+captureuser hard rtprio 80
+@domesday soft rtprio 80
+@domesday hard rtprio 80
+```
+
+Then start a fresh login session and check again:
+
+```sh
+ulimit -r
+```
+
+Existing terminals, long-running desktop sessions, and already-started services keep the old inherited limit. If `ulimit -r` still reports `0` after adding the limits file, common causes are:
+
+- the command is running from an old terminal that was open before the limit changed
+- the user is not a member of the configured group
+- the limits file uses `@group` syntax for a user name, or a bare name for a group
+- the launcher is not PAM-backed or does not inherit the shell's limits
+- a systemd service or user service has its own stricter limit
+
+For a systemd service, set the realtime priority limit in the service unit:
+
+```ini
+[Service]
+LimitRTPRIO=80
+```
+
+For a systemd user service, also check the user manager's inherited limits. A service-level `LimitRTPRIO=80` is the clearest way to make the capture environment reproducible.
+
+After changing service limits, reload and restart the service:
+
+```sh
+systemctl daemon-reload
+systemctl restart your-capture-service
+```
+
+If the warning remains but the JSON sidecar reports `transferResultString` as `success`, the run completed despite normal scheduling priority. Record the warning with the capture results, especially when comparing long-run stability or investigating dropped/corrupt data.
 
 ## What To Record For Bugs
 

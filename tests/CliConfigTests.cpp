@@ -90,17 +90,17 @@ int main()
     progressSnapshot.bytesWritten = 5 * 1024 * 1024;
     progressSnapshot.transfers = 123;
     progressSnapshot.samples = 456;
-    assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123 samples=456");
+    assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123");
     progressSnapshot.playerPosition = "timecode=0:01:35";
-    assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123 samples=456 timecode=0:01:35");
+    assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123 timecode=0:01:35");
 
     std::ostringstream liveOutput;
     ProgressLine liveProgress(liveOutput, false, true);
     liveProgress.update({ 100, 12 * 1024 * 1024, 99999, 88888 });
     liveProgress.update({ 1, 0, 1, 2 });
     std::string liveText = liveOutput.str();
-    assert(liveText.starts_with("\relapsed=100s written=12MiB transfers=99999 samples=88888"));
-    assert(liveText.find("\relapsed=1s written=0MiB transfers=1 samples=2 ") != std::string::npos);
+    assert(liveText.starts_with("\relapsed=100s written=12MiB transfers=99999"));
+    assert(liveText.find("\relapsed=1s written=0MiB transfers=1 ") != std::string::npos);
     liveProgress.clear();
     std::string clearedText = liveOutput.str();
     assert(clearedText.ends_with("\r"));
@@ -124,11 +124,11 @@ int main()
     ProgressLine periodicProgress(periodicOutput, false, false);
     auto periodicStart = std::chrono::steady_clock::now();
     periodicProgress.update({ 1, 1 * 1024 * 1024, 1, 2, "frame=12345" }, periodicStart);
-    assert(periodicOutput.str() == "elapsed=1s written=1MiB transfers=1 samples=2 frame=12345\n");
+    assert(periodicOutput.str() == "elapsed=1s written=1MiB transfers=1 frame=12345\n");
     periodicProgress.update({ 2, 2 * 1024 * 1024, 3, 4 }, periodicStart + std::chrono::seconds(9));
-    assert(periodicOutput.str() == "elapsed=1s written=1MiB transfers=1 samples=2 frame=12345\n");
+    assert(periodicOutput.str() == "elapsed=1s written=1MiB transfers=1 frame=12345\n");
     periodicProgress.update({ 11, 3 * 1024 * 1024, 5, 6 }, periodicStart + std::chrono::seconds(10));
-    assert(periodicOutput.str().ends_with("elapsed=11s written=3MiB transfers=5 samples=6\n"));
+    assert(periodicOutput.str().ends_with("elapsed=11s written=3MiB transfers=5\n"));
     std::string periodicText = periodicOutput.str();
     periodicProgress.clear();
     periodicProgress.finish();

@@ -17,8 +17,7 @@ std::string formatCaptureProgressLine(const CaptureProgressSnapshot& snapshot)
     std::ostringstream stream;
     stream << "elapsed=" << snapshot.elapsedSeconds << "s "
            << "written=" << snapshot.bytesWritten / (1024 * 1024) << "MiB "
-           << "transfers=" << snapshot.transfers
-           << " samples=" << snapshot.samples;
+           << "transfers=" << snapshot.transfers;
     if (!snapshot.playerPosition.empty())
     {
         stream << ' ' << snapshot.playerPosition;
