@@ -471,6 +471,10 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     constexpr int maxDiscEndReadAttempts = 5;
     if (needsDiscEndProbe && activeOptions.discType == DiscTypeCli::Cav)
     {
+        if (!activeOptions.quiet)
+        {
+            std::cerr << "Searching for CAV disc end frame\n";
+        }
         bool seekAcknowledged = player.setPositionFrame(60000);
         for (int attempt = 0; attempt < maxDiscEndReadAttempts && discEnd < 0; ++attempt)
         {
@@ -493,6 +497,10 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         {
             std::cerr << "CAV end probe seek did not acknowledge, using reported frame " << discEnd << "\n";
         }
+        else if (!activeOptions.quiet)
+        {
+            std::cerr << "Detected CAV disc end frame: " << discEnd << "\n";
+        }
         if (stopDuringSetup())
         {
             return 1;
@@ -500,6 +508,10 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     }
     else if (needsDiscEndProbe)
     {
+        if (!activeOptions.quiet)
+        {
+            std::cerr << "Searching for CLV disc end time code\n";
+        }
         constexpr int latestClvAddressToProbeSeconds = (1 * 60 * 60) + (59 * 60) + 59;
         if (!player.setPositionTimeCode(latestClvAddressToProbeSeconds))
         {
@@ -522,6 +534,10 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         {
             std::cerr << "Could not determine CLV disc length\n";
             return 1;
+        }
+        if (!activeOptions.quiet)
+        {
+            std::cerr << "Detected CLV disc end time code: " << formatClvProgressTimeCode(discEnd) << "\n";
         }
         if (stopDuringSetup())
         {
