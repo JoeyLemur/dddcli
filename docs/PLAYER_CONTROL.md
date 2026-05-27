@@ -100,3 +100,5 @@ For `?U`, Pioneer documents `E04` as the response when no data is encoded in the
 - `discStatus`
 
 Use `playerProfile` to confirm whether `auto` selected the intended command profile.
+
+`player status` is passive: it does not spin up, seek, or otherwise move the disc just to resolve the disc type. On the LD-V2200, a loaded but stopped disc may report `discStatus=1XXXX` and `discType=unknown` until playback or another active state lets the player identify CAV versus CLV. Treat `discStatus=1XXXX` as "a disc is loaded, but type is not currently known," not as the no-disc baseline.

@@ -250,13 +250,7 @@ PlayerStateCli PlayerSerial::getPlayerState()
 
 DiscTypeCli PlayerSerial::getDiscType()
 {
-    auto response = commandResponse(commandProfile(currentProfile).discStatusRequest, NormalTimeoutMs);
-    if (response.size() >= 2)
-    {
-        if (response[1] == '0') return DiscTypeCli::Cav;
-        if (response[1] == '1') return DiscTypeCli::Clv;
-    }
-    return DiscTypeCli::Unknown;
+    return parsePlayerDiscTypeResponse(commandResponse(commandProfile(currentProfile).discStatusRequest, NormalTimeoutMs));
 }
 
 std::string PlayerSerial::getDiscStatus()
@@ -532,6 +526,18 @@ float parsePlayerPhysicalPositionResponse(const std::string& response)
 
     value = ((value & 0xFF00) >> 8) | ((value & 0x00FF) << 8);
     return (float)value / 100.0f;
+}
+
+DiscTypeCli parsePlayerDiscTypeResponse(std::string response)
+{
+    response = stripTrailingCr(response);
+    if (response.size() < 5 || response[0] != '1')
+    {
+        return DiscTypeCli::Unknown;
+    }
+    if (response[1] == '0') return DiscTypeCli::Cav;
+    if (response[1] == '1') return DiscTypeCli::Clv;
+    return DiscTypeCli::Unknown;
 }
 
 AddressResult parsePlayerFrameResponse(std::string response)

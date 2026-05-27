@@ -70,6 +70,7 @@ PlayerProfileCli playerProfileForModelCode(const std::string& playerCode, Player
 bool playerRawCommandFits(std::string command);
 std::string playerTimeCodeSeekCommand(PlayerProfileCli profile, int address);
 float parsePlayerPhysicalPositionResponse(const std::string& response);
+DiscTypeCli parsePlayerDiscTypeResponse(std::string response);
 AddressResult parsePlayerFrameResponse(std::string response);
 AddressResult parsePlayerTimeCodeResponse(std::string response);
 std::string escapedSerialResponse(const std::string& response);

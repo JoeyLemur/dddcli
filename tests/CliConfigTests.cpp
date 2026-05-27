@@ -601,6 +601,14 @@ int main()
     assert(parsePlayerPhysicalPositionResponse("0010\r") == 40.96f);
     assert(parsePlayerPhysicalPositionResponse("123") == 0.0f);
     assert(parsePlayerPhysicalPositionResponse("zzzz\r") == 0.0f);
+    assert(parsePlayerDiscTypeResponse("0XXXX\r") == DiscTypeCli::Unknown);
+    assert(parsePlayerDiscTypeResponse("1XXXX\r") == DiscTypeCli::Unknown);
+    assert(parsePlayerDiscTypeResponse("10001\r") == DiscTypeCli::Cav);
+    assert(parsePlayerDiscTypeResponse("11001\r") == DiscTypeCli::Clv);
+    assert(parsePlayerDiscTypeResponse("E04\r") == DiscTypeCli::Unknown);
+    assert(parsePlayerDiscTypeResponse("") == DiscTypeCli::Unknown);
+    assert(parsePlayerDiscTypeResponse("1\r") == DiscTypeCli::Unknown);
+    assert(parsePlayerDiscTypeResponse("abcde\r") == DiscTypeCli::Unknown);
 
     auto timeCode5 = parsePlayerTimeCodeResponse("01234\r");
     assert(timeCode5.address == 754);

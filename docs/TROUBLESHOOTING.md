@@ -94,6 +94,12 @@ If it fails:
 ./build/dddcli player raw-command '?X' --serial-device /dev/ttyUSB0
 ```
 
+## Loaded Disc Reports Unknown Type
+
+`player status` does not spin up or seek the disc just to identify CAV versus CLV. Some players, including the LD-V2200, can report a loaded but stopped disc as `discStatus=1XXXX` and `discType=unknown`. This is different from the no-disc baseline such as `discStatus=0XXXX`.
+
+If you need to confirm the disc type manually, start playback or run an auto-capture mode that already spins and positions the player as part of its normal setup. After playback starts, status should report `discType=CAV` or `discType=CLV` if the player exposes it.
+
 ## Wrong Player Profile
 
 Check:

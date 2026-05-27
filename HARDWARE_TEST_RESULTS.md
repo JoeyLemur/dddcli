@@ -251,10 +251,6 @@ Code changes validated by the successful capture:
 - Wrapped CLV restart addresses are checked before metadata recording, so the post-wrap address does not pollute `minTimeCode`/`maxTimeCode`.
 - `ctest --test-dir build --output-on-failure` passed after these changes.
 
-### Needs Work / Follow-Up
-
-- Consider documenting that loaded-but-stopped CLV status may initially report `discType=unknown` until playback status is queried.
-
 ## 2026-05-27 - LD-V2200 CAV Disc-Loaded Tests
 
 ### Setup
@@ -313,4 +309,4 @@ Code changes validated by the successful CAV captures:
 
 ### Needs Work / Follow-Up
 
-- Consider documenting that loaded-but-stopped CLV status may initially report `discType=unknown` until playback status is queried.
+- No active LD-V2200 CLV/CAV follow-up remains for the tested discs. Minute-only CLV and readable user-code data still require suitable media.
