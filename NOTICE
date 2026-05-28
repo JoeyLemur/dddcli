@@ -1,0 +1,22 @@
+dddcli
+
+This project is a C++20 command-line port derived from the Domesday
+Duplicator project:
+
+    https://github.com/simoninns/DomesdayDuplicator
+
+Domesday Duplicator was written and designed by Simon Inns.
+
+The upstream DomesdayDuplicator repository is distributed under the GNU
+General Public License version 3.0. The portions of this repository derived
+from DomesdayDuplicator remain under the GNU GPL version 3.0. See LICENSE
+for the full license text.
+
+Copyright in portions derived from DomesdayDuplicator remains with the
+original DomesdayDuplicator copyright holders, including Simon Inns.
+
+Copyright (C) 2026 Ed Powell for dddcli-specific modifications and
+packaging.
+
+This repository contains command-line-specific modifications and packaging
+for dddcli.
