@@ -1,6 +1,6 @@
 # USB Capture Performance Testing
 
-Use this checklist to validate the conservative USB capture performance recommendations from the review. These tests focus on Linux/libusb capture hosts and are meant to answer three questions:
+Use this checklist when validating USB capture performance on a real capture host. These tests focus on Linux/libusb capture hosts and are meant to answer three questions:
 
 - Is the binary built with optimization appropriate for capture?
 - Does the host sustain the expected capture rate without USB or storage backpressure?
@@ -201,7 +201,7 @@ Expected:
 
 ## 8. Current Observability Gaps
 
-The current CLI JSON sidecar is enough for coarse throughput checks, but it does not yet expose the exact hot-path timings from the review.
+The current CLI JSON sidecar is enough for coarse throughput checks, but it does not yet expose exact hot-path timings.
 
 Before changing capture behavior, add temporary or permanent metrics for:
 

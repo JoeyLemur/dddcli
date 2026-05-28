@@ -11,8 +11,7 @@ cmake -S . -B build
 If configuration fails, check:
 
 - libusb development files are installed
-- the Domesday Duplicator GUI source checkout exists as the expected sibling directory
-- the GUI CMake modules are available from that checkout
+- `pkg-config` can find `libusb-1.0`
 
 Then rebuild:
 
@@ -130,7 +129,7 @@ All three mean 12 minutes and 34 seconds.
 
 These values are absolute displayed timecodes from the player. Whole-disc CLV auto-capture does not require the disc to begin at `0:00:00`, but manually supplied `--start-address` and `--end-address` values should match the disc's displayed timecodes rather than offsets from the first playable code.
 
-Some older CLV discs only expose hour/minute precision. If whole-disc capture detects an end timecode on an exact minute boundary, the CLI waits up to 60 seconds after first seeing that end address so it does not drop the rest of the final minute. It still stops early if the player reaches a terminal state during that post-roll.
+Some older CLV discs only expose hour/minute precision. If whole-disc capture detects an end timecode on an exact minute boundary, the CLI waits up to 61 seconds after first seeing that end address so it does not drop the rest of the final minute. It still stops early if the player reaches a terminal state during that post-roll.
 
 For raw hardware evidence, query:
 

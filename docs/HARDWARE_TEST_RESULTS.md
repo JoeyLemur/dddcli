@@ -121,9 +121,9 @@ Conclusion: this LD-V2200 returns 5-digit `HMMSS` CLV timecode during playback o
 | Test | Command | Result | Escaped response |
 | --- | --- | --- | --- |
 | CAV frame query on CLV disc | `./build/dddcli player raw-command '?F' --serial-device /dev/ttyUSB0 --serial-speed 4800` | PASS | `E04\r`. |
-| Pioneer user-code query | `./build/dddcli player raw-command '?U' --serial-device /dev/ttyUSB0 --serial-speed 4800` | PASS | `E04\r`; per the Level III manual, `?U` returns `E04` when no data is encoded in the Pioneer User's Code. |
+| Pioneer user-code query | `./build/dddcli player raw-command '?U' --serial-device /dev/ttyUSB0 --serial-speed 4800` | PASS | `E04\r`. This is ambiguous for the LD-V2200: it may mean no Pioneer User's Code data is encoded, or it may mean the model does not support the `?U` command. |
 | Inherited standard user-code query | `./build/dddcli player raw-command '$Y' --serial-device /dev/ttyUSB0 --serial-speed 4800` | PASS | `E04\r`. `$Y` came from the inherited GUI code and may be model-specific; it has not been matched to the LD-V2200 Level III manual yet. |
-| Read user codes action | `./build/dddcli player read-user-codes --serial-device /dev/ttyUSB0 --serial-speed 4800` | PASS | `standardUserCode=E04`; `pioneerUserCode=E04`. The Pioneer value is a documented no-data response for this disc; the standard value is legacy/model-specific evidence. |
+| Read user codes action | `./build/dddcli player read-user-codes --serial-device /dev/ttyUSB0 --serial-speed 4800` | PASS | `standardUserCode=E04`; `pioneerUserCode=E04`. Both values are legacy/model-specific evidence on the LD-V2200 until the command support is confirmed against the model's manual or a disc with known user-code data. |
 
 ### Basic Player Controls
 
@@ -281,6 +281,7 @@ Code changes validated by the successful capture:
 | Whole-disc CAV auto-capture, after end-probe recovery | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed 4800 --disc-type cav --mode whole-disc --output /home/tmp/dddcli-cav-ldv2200-whole-disc-20260527-rerun.lds --json /home/tmp/dddcli-cav-ldv2200-whole-disc-20260527-rerun.json` | PASS | Capture logged `CAV end probe seek did not acknowledge, using reported frame 37045`, submitted the full 2016-transfer queue, reached the detected end, reported `Capture complete: success`, and wrote JSON metadata. Output `.lds` size was 77,776,814,080 bytes. JSON recorded `minFrameNumber=4`, `maxFrameNumber=37055`, `durationInMilliseconds=1555684`, `transferCount=949503`, `sampleCount=62221451264`, and `sequenceMarkersPresent=true`. Follow-up status reported `state=stop`, `discType=CAV`, `discStatus=10001`. |
 | Short lead-in CAV auto-capture, auto-detected disc type | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed auto --mode lead-in --end-address 300 --format cds --output /tmp/dddcli-cav-autodetect-stopcode-smoke.cds --json /tmp/dddcli-cav-autodetect-stopcode-smoke.json` | PASS | Command intentionally omitted `--disc-type`. Capture logged `Auto-detected disc type: CAV`, submitted the full 2016-transfer queue, reported `Capture complete: success`, and wrote JSON metadata. JSON recorded `discType=CAV`, `minFrameNumber=4`, `maxFrameNumber=300`, `durationInMilliseconds=24263`, `fileSizeWrittenInBytes=301137920`, and `sequenceMarkersPresent=true`. Follow-up status reported `state=stop`, `discType=CAV`, `discStatus=10001`. |
 | Partial CAV auto-capture through stop codes, auto-detected disc type | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed auto --mode partial --start-address 0 --end-address 2000 --format cds --output /tmp/dddcli-cav-autodetect-stopcode-partial.cds --json /tmp/dddcli-cav-autodetect-stopcode-partial.json` | PASS | Command intentionally omitted `--disc-type`. Capture logged `Auto-detected disc type: CAV`, then logged `CAV player entered still-frame; resumed playback` twice during normal CAV play. Capture reached the requested range and reported `Capture complete: success`. JSON recorded `discType=CAV`, `minFrameNumber=5`, `maxFrameNumber=2004`, `durationInMilliseconds=71027`, `fileSizeWrittenInBytes=885719040`, and `sequenceMarkersPresent=true`. Follow-up status reported `state=stop`, `discType=CAV`, `discStatus=10001`. |
+| Alternate CAV disc end-probe regression | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed auto --mode lead-in --end-address 300 --format cds --output /tmp/dddcli-cav-endprobe-newdisc.cds --json /tmp/dddcli-cav-endprobe-newdisc.json` | PASS | Command intentionally omitted `--disc-type`. Capture logged `Auto-detected disc type: CAV`, `Searching for CAV disc end frame`, then `CAV end probe seek did not acknowledge, using reported frame 53947`. Capture started from lead-in, reached frame 300, reported `Capture complete: success`, and wrote JSON metadata. JSON recorded `discType=CAV`, `minFrameNumber=4`, `maxFrameNumber=300`, `durationInMilliseconds=24787`, `fileSizeWrittenInBytes=307691520`, `sequenceMarkersPresent=true`, `minSampleValue=0`, `maxSampleValue=1023`, `clippedMinSampleCount=3330964`, and `clippedMaxSampleCount=2943336`. Follow-up status reported `state=stop`, `discType=CAV`, `discStatus=10001`. |
 
 Code changes validated by the successful CAV captures:
 
@@ -313,4 +314,41 @@ Code changes validated by the successful CAV captures:
 
 ### Needs Work / Follow-Up
 
-- No active LD-V2200 CLV/CAV follow-up remains for the tested discs. Minute-only CLV and readable user-code data still require suitable media.
+- No active LD-V2200 CLV/CAV follow-up remains for the tested discs. Readable user-code data still requires suitable media and model-specific confirmation of the correct query command.
+
+## 2026-05-28 - LD-V2200 Minute-Stepped CLV Disc Tests
+
+### Setup
+
+- Player: Pioneer LD-V2200
+- Serial device: `/dev/ttyUSB0`
+- Serial speed: `4800`
+- Disc: CLV with minute-stepped timecode behavior
+- Note: player signal/capture quality was treated as non-diagnostic because the player is starting to show analog issues.
+
+### Raw Timecode Evidence
+
+| Test | Command | Result | Notes |
+| --- | --- | --- | --- |
+| Initial status with disc loaded | `./build/dddcli player status --serial-device /dev/ttyUSB0 --serial-speed 4800` | PASS | Stopped player reported `state=stop`, `discType=unknown`, `discStatus=1XXXX`. |
+| Playback status | `./build/dddcli player play --serial-device /dev/ttyUSB0 --serial-speed 4800`; then status | PASS | Follow-up status reported `state=play`, `discType=CLV`, `discStatus=110X1`. |
+| Raw timecode at start | `./build/dddcli player raw-command '?T' --serial-device /dev/ttyUSB0 --serial-speed 4800 --player-profile pioneer-ld-v2200` | PASS | Returned `00000\r` repeatedly while playing. The player reported 5-character `HMMSS`, but seconds stayed at `00`. |
+| Cross-profile timecode shape | Same `?T` with `pioneer-ld-v4300d` and `generic-level3` profiles | PASS | Both returned `00000\r`, confirming the response shape came from the player/disc rather than profile formatting. |
+| Seek to 1 minute | `./build/dddcli player raw-command 'TM00100SE' --serial-device /dev/ttyUSB0 --serial-speed 4800 --player-profile pioneer-ld-v2200`; then `?T` | PASS | Seek returned `R\r`; follow-up `?T` returned `00100\r`, then remained `00100\r` after several seconds. |
+| Manual CLV end probe | `./build/dddcli player raw-command 'TM15959SE' --serial-device /dev/ttyUSB0 --serial-speed 4800 --player-profile pioneer-ld-v2200`; then `?T` | PASS | Seek returned `R\r`; follow-up `?T` returned `04400\r`, indicating a minute-aligned detected end at 2640 seconds. |
+
+### Auto-Capture Behavior
+
+| Test | Command | Result | Notes |
+| --- | --- | --- | --- |
+| Short minute-step CLV partial capture | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed 4800 --disc-type clv --mode partial --start-address 60 --end-address 90 --output /tmp/dddcli-clv-minute-step-20260528-60-90.lds --json /tmp/dddcli-clv-minute-step-20260528-60-90.json` | PASS | Capture started at `timecode=0:01:00`, stayed there until the next minute step, then stopped successfully. Output `.lds` size was 3.0G. JSON recorded `minTimeCode=60`, `maxTimeCode=120`, `durationInMilliseconds=64048`, `fileSizeWrittenInBytes=3194224640`, and `sequenceMarkersPresent=true`. Follow-up status reported `state=stop`, `discType=CLV`, `discStatus=110X1`. |
+| Whole-disc minute-end branch, interrupted | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed 4800 --disc-type clv --mode whole-disc --output /home/tmp/dddcli-clv-minute-only-20260528.lds --json /home/tmp/dddcli-clv-minute-only-20260528.json` | PASS | Capture detected `0:44:00` and logged the then-current `Detected minute-aligned CLV disc end; using 60 second end post-roll` message. The long run was intentionally interrupted after about 5 minutes to avoid waiting most of an hour. Cleanup stopped the player and wrote metadata. JSON recorded `minTimeCode=0`, `maxTimeCode=300`, `durationInMilliseconds=336812`, `fileSizeWrittenInBytes=16832266240`, and `sequenceMarkersPresent=true`. |
+| Near-end minute-step CLV capture | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed 4800 --disc-type clv --mode partial --start-address 04000 --end-address 04459 --output /home/tmp/dddcli-clv-minute-only-near-end-20260528.lds --json /home/tmp/dddcli-clv-minute-only-near-end-20260528.json` | PASS | Capture sought to `0:40:00`, advanced by minute steps through `0:44:00`, did not stop immediately at the first final-minute report, then detected `CLV time code wrapped from 2640 to 2400 near requested end` and stopped successfully. Output `.lds` size was 15G. JSON recorded `minTimeCode=2400`, `maxTimeCode=2640`, `durationInMilliseconds=302396`, `fileSizeWrittenInBytes=15111290880`, and `sequenceMarkersPresent=true`. Follow-up status reported `state=stop`, `discType=CLV`, `discStatus=110X1`. |
+| 61-second post-roll message smoke | `./build/dddcli auto-capture --serial-device /dev/ttyUSB0 --serial-speed 4800 --disc-type clv --mode whole-disc --output /home/tmp/dddcli-clv-minute-only-61s-smoke-20260528.lds --json /home/tmp/dddcli-clv-minute-only-61s-smoke-20260528.json` | PASS | After the post-roll constant was changed from 60 to 61 seconds, the whole-disc end probe detected `0:44:00` and logged `Detected minute-aligned CLV disc end; using 61 second end post-roll`. The run was interrupted after the smoke condition was observed; capture stopped cleanly and wrote metadata. Output `.lds` size was 1.5G. JSON recorded `minTimeCode=0`, `maxTimeCode=0`, `durationInMilliseconds=30239`, `fileSizeWrittenInBytes=1503395840`, and `sequenceMarkersPresent=true`. Follow-up status reported `state=stop`, `discType=CLV`, `discStatus=110X1`. |
+
+Validated behavior:
+
+- The parser normalized `HMMSS` responses with seconds fixed at `00` to seconds correctly, for example `04000` to `2400` and `04400` to `2640`.
+- The whole-disc CLV end probe recognized a minute-aligned detected end and selected the minute-aligned post-roll path. A follow-up smoke run confirmed the current 61 second message on hardware.
+- A near-end capture did not treat the first `0:44:00` report as an immediate stop; it continued through the final displayed minute and stopped cleanly on wrap.
+- Wrapped restart addresses were not recorded in metadata; the near-end JSON max stayed at `2640`.

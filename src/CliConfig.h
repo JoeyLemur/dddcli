@@ -114,7 +114,7 @@ struct AutoCaptureEndAddress
 };
 
 inline constexpr auto ClvSecondAddressPostRoll = std::chrono::milliseconds(1500);
-inline constexpr auto ClvMinuteAddressPostRoll = std::chrono::seconds(60);
+inline constexpr auto ClvMinuteAddressPostRoll = std::chrono::seconds(61);
 
 class TomlConfig
 {

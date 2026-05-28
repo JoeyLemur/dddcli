@@ -675,8 +675,8 @@ int main()
 
     AutoCaptureStopState clvMinuteStop;
     assert(!shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now, clvMinuteStop, ClvMinuteAddressPostRoll));
-    assert(!shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now + std::chrono::milliseconds(59999), clvMinuteStop, ClvMinuteAddressPostRoll));
-    assert(shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now + std::chrono::seconds(60), clvMinuteStop, ClvMinuteAddressPostRoll));
+    assert(!shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now + std::chrono::seconds(60), clvMinuteStop, ClvMinuteAddressPostRoll));
+    assert(shouldStopAutoCaptureAtAddress(DiscTypeCli::Clv, 3600, 3600, now + std::chrono::seconds(61), clvMinuteStop, ClvMinuteAddressPostRoll));
 
     AutoCaptureStopState inactivePostRoll;
     assert(!shouldStopAutoCaptureForPlayerState(DiscTypeCli::Clv, inactivePostRoll, PlayerStateCli::Stop));

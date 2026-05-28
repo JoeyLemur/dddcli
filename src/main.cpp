@@ -574,7 +574,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     auto clvPostRoll = clvEndAddressPostRoll(resolvedEnd, discEnd);
     if (activeOptions.discType == DiscTypeCli::Clv && clvPostRoll == ClvMinuteAddressPostRoll && !activeOptions.quiet)
     {
-        std::cerr << "Detected minute-aligned CLV disc end; using 60 second end post-roll\n";
+        std::cerr << "Detected minute-aligned CLV disc end; using 61 second end post-roll\n";
     }
 
     bool captureFromLeadIn = activeOptions.autoCaptureMode == AutoCaptureModeCli::WholeDisc || activeOptions.autoCaptureMode == AutoCaptureModeCli::LeadIn;

@@ -110,6 +110,6 @@ Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureIn
 - [Auto Capture](docs/AUTO_CAPTURE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [USB Capture Performance Testing](docs/USB_CAPTURE_PERFORMANCE_TESTING.md)
-- [Hardware Test Checklist](HARDWARE_TESTS.md)
+- [Hardware Test Checklist](docs/HARDWARE_TESTS.md)
 
 For contributor and agent guidance, see [AGENTS.md](AGENTS.md).

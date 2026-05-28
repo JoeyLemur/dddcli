@@ -40,7 +40,7 @@ On Linux, confirm the matching `/dev/bus/usb/...` node is writable by the captur
 ls -l /dev/bus/usb/004/002
 ```
 
-Expected: the node is writable by the capture user, for example `crw-rw-rw-` when using a late `/etc/udev/rules.d/99-domesday.rules` rule. If it is still `0664 root:root`, see `docs/TROUBLESHOOTING.md`.
+Expected: the node is writable by the capture user, for example `crw-rw-rw-` when using a late `/etc/udev/rules.d/99-domesday.rules` rule. If it is still `0664 root:root`, see `TROUBLESHOOTING.md`.
 
 ### Linux Capture Host Tuning
 
@@ -158,7 +158,7 @@ Capture raw responses for commands used by the profiles:
 
 Record the escaped output exactly. Especially note whether CLV `?T` returns 3 digits (`HMM`), 5 digits (`HMMSS`), or 7 digits (`HMMSSFF`) on each player.
 
-With no disc loaded, address/user-code requests may return an error response such as `E04\r`; record that as the no-disc baseline rather than treating it as a CLI failure if the command exits successfully.
+With no disc loaded, address/user-code requests may return an error response such as `E04\r`; record that as the no-disc baseline rather than treating it as a CLI failure if the command exits successfully. On some players, `?U` may be unsupported, so an `E04\r` response should not be treated as proof that no Pioneer User's Code is encoded unless the model's command set confirms `?U`.
 
 ## 4. Basic Player Controls
 
@@ -167,7 +167,6 @@ With a disc loaded:
 ```sh
 ./build/dddcli player play --serial-device /dev/ttyUSB0
 ./build/dddcli player pause --serial-device /dev/ttyUSB0
-./build/dddcli player still --serial-device /dev/ttyUSB0
 ./build/dddcli player stop --serial-device /dev/ttyUSB0
 ```
 
@@ -178,6 +177,17 @@ After each command, run:
 ```
 
 Expected: command succeeds, status reflects the new state, and the player does not drop serial communication.
+
+Test `still` separately with a CAV disc:
+
+```sh
+./build/dddcli player play --serial-device /dev/ttyUSB0
+./build/dddcli player still --serial-device /dev/ttyUSB0
+./build/dddcli player status --serial-device /dev/ttyUSB0
+./build/dddcli player stop --serial-device /dev/ttyUSB0
+```
+
+Expected: CAV `still` succeeds and status reports `state=still-frame`. On CLV discs, some players such as the LD-V2200 reject `ST` with `E04`; record that model-specific response rather than treating it as a serial transport failure.
 
 ## 5. CLV Timecode Behavior
 
@@ -274,7 +284,7 @@ Then run a whole-disc CLV auto-capture:
 
 Expected:
 
-- stderr reports `Detected minute-aligned CLV disc end; using 60 second end post-roll`
+- stderr reports `Detected minute-aligned CLV disc end; using 61 second end post-roll`
 - capture does not stop immediately when the final reported minute is first reached
 - capture continues through the final minute, or ends cleanly earlier only if the player reports `Stop`, `Pause`, or `StillFrame`
 - JSON `maxTimeCode` is on a minute boundary for the minute-only reported address

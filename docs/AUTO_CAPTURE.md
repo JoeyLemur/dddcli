@@ -1,6 +1,6 @@
 # Auto Capture
 
-`auto-capture` coordinates USB capture with a serial-controlled LaserDisc player. It verifies the requested disc type, positions the player, starts USB capture, starts playback, monitors the player address, then stops capture and writes metadata. Whole-disc and lead-in captures also probe the disc end address during setup.
+`auto-capture` coordinates USB capture with a serial-controlled LaserDisc player. It detects the loaded disc type, verifies it against `--disc-type` when an override is supplied, positions the player, starts USB capture, starts playback, monitors the player address, then stops capture and writes metadata. Whole-disc and lead-in captures also probe the disc end address during setup.
 
 ## Modes
 
@@ -18,13 +18,13 @@ For `whole-disc` and `lead-in`, setup verifies the player is stopped immediately
 
 Auto-capture turns the player's on-screen display on by default with `1DS` before positioning and playback. Use `--no-on-screen-display` or `[auto_capture] on_screen_display = false` to send `0DS` instead when you want the player display disabled during capture.
 
-Some older CLV discs only expose hour/minute timecode precision. If the detected CLV disc end lands exactly on a minute boundary and the capture range uses that detected end, the CLI treats the end as possibly minute-granular and uses a 60 second end post-roll instead of the normal second-granular post-roll. This avoids cutting off most of the final minute; the capture can still finish earlier if the player stops, pauses, or still-frames during that post-roll.
+Some older CLV discs only expose hour/minute timecode precision. If the detected CLV disc end lands exactly on a minute boundary and the capture range uses that detected end, the CLI treats the end as possibly minute-granular and uses a 61 second end post-roll instead of the normal second-granular post-roll. This avoids cutting off most of the final minute; the capture can still finish earlier if the player stops, pauses, or still-frames during that post-roll.
 
 If a CLV capture reaches the end of its requested range and the player rolls over to an earlier timecode instead of stopping, the CLI treats that wraparound as the end of the range and stops capture.
 
 ## Disc Type
 
-`--disc-type cav|clv` is required. The CLI also asks the player for the loaded disc type and fails if the player response does not match the requested type.
+`--disc-type cav|clv` is optional. When it is omitted, the CLI asks the player for the loaded disc type and uses that detected type for address handling and metadata. When it is supplied, the CLI still asks the player for the loaded disc type and fails if the player response does not match the requested type.
 
 CAV uses frame addresses. CLV uses player-reported timecodes normalized to seconds internally.
 

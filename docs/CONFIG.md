@@ -8,15 +8,15 @@ Values are applied before command-line parsing, so command-line flags always win
 
 ## Config File Location
 
-The default config path is chosen in this order:
+The default config path is selected from the environment:
 
-1. `$XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml`
-2. `$HOME/.config/domesday-duplicator/dddcli.toml`
-3. `dddcli.toml` in the current working directory
+1. If `$XDG_CONFIG_HOME` is set, `$XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml`
+2. Otherwise, if `$HOME` is set, `$HOME/.config/domesday-duplicator/dddcli.toml`
+3. Otherwise, `dddcli.toml` in the current working directory
 
 Use `--config <file>` to choose a different file.
 
-Missing config files are allowed. Syntax errors fail startup.
+Only the selected default path is checked; these locations are not searched as a fallback chain. Missing config files are allowed. Syntax errors fail startup.
 
 ## Example
 
@@ -45,6 +45,7 @@ serial_speed = "auto"
 profile = "auto"
 
 [auto_capture]
+# Optional. Omit this to let auto-capture detect the loaded disc type.
 disc_type = "clv"
 mode = "partial"
 start_address = "60"
@@ -88,7 +89,7 @@ Player options:
 
 Auto-capture options:
 
-- `--disc-type cav|clv`: required for auto-capture.
+- `--disc-type cav|clv`: optional override for the player-detected disc type. If supplied, auto-capture fails when the loaded disc does not match.
 - `--mode whole-disc|lead-in|partial`: capture range mode.
 - `--start-address <n>` and `--end-address <n>`: frame address for CAV, normalized seconds or compact timecode for CLV. Partial auto-capture requires the normalized end address to be greater than the start address.
 - `--key-lock`: key-lock the player during capture and release it during cleanup. If the player cannot enable key lock, auto-capture aborts before capture starts.
@@ -131,6 +132,7 @@ Defaults:
 - capture format: `lds`
 - serial speed: `auto`
 - player profile: `auto`
+- auto-capture disc type: auto-detected from the player
 - auto-capture mode: `whole-disc`
 - auto-capture on-screen display: enabled
 - USB transfers: small transfers enabled, reduced transfer queue disabled
