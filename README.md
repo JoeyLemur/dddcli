@@ -1,8 +1,6 @@
 # dddcli
 
-`dddcli` is a C++20 command-line tool for Domesday Duplicator capture workflows. It can list connected DdD USB devices, capture RF samples, control Pioneer-compatible LaserDisc players over serial, and run automated captures that coordinate the USB capture with player transport state.
-
-This is hardware-facing software. Capture commands can write large files, and player commands can spin discs, seek, stop, pause, and key-lock the front panel.
+`dddcli` is a Linux command-line tool for Domesday Duplicator capture workflows. It can list connected DdD USB devices, capture RF samples, control Pioneer-compatible LaserDisc players over serial, and run automated captures that coordinate the USB capture with player transport state.
 
 ## Build
 
