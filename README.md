@@ -83,13 +83,13 @@ Interactive captures show one updating progress line on stderr. When stderr is r
 
 ## Configuration
 
-An example config is provided at [dddcli.example.toml](dddcli.example.toml). Copy it to `${XDG_CONFIG_HOME:-$HOME/.config}/domesday-duplicator/dddcli.toml` for normal use, or pass it after the command for a one-off run:
+An example config is provided at [dddcli.example.toml](dddcli.example.toml). Copy it to `${XDG_CONFIG_HOME:-$HOME/.config}/domesday-duplicator/dddcli.toml` for normal use, or pass it anywhere among the command words for a one-off run:
 
 ```sh
 ./build/dddcli capture --config ./dddcli.example.toml --duration 10
 ```
 
-Command-line flags override config values. See [Configuration](docs/CONFIG.md) for the supported keys and default path rules.
+Command-line flags override matching config values, except that `capture.test_mode` and `auto_capture.key_lock` can only be enabled from the CLI. See [Configuration](docs/CONFIG.md) for the supported keys and default path rules.
 
 ## Commands
 

@@ -38,7 +38,7 @@ address >= endAddress
 
 A CAV frame is an exact frame address, so there is no CLV-style need to continue capturing through the rest of a displayed second. Polling latency can capture a little extra data, but it should not drop the requested final frame.
 
-If a CAV capture from lead-in falls into still-frame during capture, the CLI attempts to resume play.
+If a CAV capture falls into still-frame during capture, the CLI attempts to resume play.
 
 ## CLV Stop Behavior
 

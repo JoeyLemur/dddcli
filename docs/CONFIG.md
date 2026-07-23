@@ -1,10 +1,10 @@
 # Configuration
 
-`dddcli` accepts options from a small TOML-style config file and from command-line flags. Command-line flags override config values.
+`dddcli` accepts options from a small TOML-style config file and from command-line flags. Command-line flags override matching config values, except that the enable-only `capture.test_mode` and `auto_capture.key_lock` settings have no disabling command-line flags.
 
 The config parser supports section headers, `key = value`, comments marked with `#`, quoted or unquoted scalar values, and simple booleans. It is intentionally not a full TOML implementation: arrays are not supported, `#` starts a comment outside quoted text, and unknown keys fail startup.
 
-Values are applied before command-line parsing, so command-line flags always win over matching config keys.
+Values are applied before command-line parsing, so a supplied command-line flag overrides its matching config key. To disable `capture.test_mode` or `auto_capture.key_lock`, set the config value to `false`; their CLI flags only enable them.
 
 ## Config File Location
 
@@ -79,7 +79,7 @@ Global options:
 
 - `--config <file>`: config file path.
 - `--debug`: enable debug logging from the USB backend.
-- `--quiet`: suppress non-error status/progress output.
+- `--quiet`: suppress routine non-error setup, status, and progress output. Final completion and error messages still print.
 
 Options may appear before, between, or after command words, including after the player action for `dddcli player`.
 
