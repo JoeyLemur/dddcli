@@ -198,6 +198,15 @@ int main()
     assertParseThrows(negativeDurationArgv, 4);
     const char* invalidDiskBufferSizeArgv[] = { "dddcli", "capture", "--disk-buffer-queue-size", "128MiBtypo" };
     assertParseThrows(invalidDiskBufferSizeArgv, 4);
+    const char* zeroDiskBufferSizeArgv[] = { "dddcli", "capture", "--disk-buffer-queue-size", "0" };
+    assertParseThrows(zeroDiskBufferSizeArgv, 4);
+    const char* smallDiskBufferSizeArgv[] = { "dddcli", "capture", "--disk-buffer-queue-size", "1MiB" };
+    assertParseThrows(smallDiskBufferSizeArgv, 4);
+    const char* decimalSmallDiskBufferSizeArgv[] = { "dddcli", "capture", "--disk-buffer-queue-size", "6MB" };
+    assertParseThrows(decimalSmallDiskBufferSizeArgv, 4);
+    const char* minimumDiskBufferSizeArgv[] = { "dddcli", "capture", "--disk-buffer-queue-size", "6MiB" };
+    auto minimumDiskBufferSizeParsed = parseCommandLine(4, const_cast<char**>(minimumDiskBufferSizeArgv));
+    assert(minimumDiskBufferSizeParsed.options.diskBufferQueueSize == 6 * 1024 * 1024);
 
     const char* configArgv[] = {
         "dddcli",
@@ -644,6 +653,12 @@ int main()
 
     auto invalidSizePath = std::filesystem::temp_directory_path() / "dddcli-invalid-size-test.toml";
     assertConfigApplyThrows(invalidSizePath, "[usb]\ndisk_buffer_queue_size = \"128MiBtypo\"\n");
+    auto zeroDiskBufferSizePath = std::filesystem::temp_directory_path() / "dddcli-zero-disk-buffer-size-test.toml";
+    assertConfigApplyThrows(zeroDiskBufferSizePath, "[usb]\ndisk_buffer_queue_size = 0\n");
+    auto smallDiskBufferSizePath = std::filesystem::temp_directory_path() / "dddcli-small-disk-buffer-size-test.toml";
+    assertConfigApplyThrows(smallDiskBufferSizePath, "[usb]\ndisk_buffer_queue_size = \"1MiB\"\n");
+    auto decimalSmallDiskBufferSizePath = std::filesystem::temp_directory_path() / "dddcli-decimal-small-disk-buffer-size-test.toml";
+    assertConfigApplyThrows(decimalSmallDiskBufferSizePath, "[usb]\ndisk_buffer_queue_size = \"6MB\"\n");
 
     auto invalidClvAddressPath = std::filesystem::temp_directory_path() / "dddcli-invalid-clv-address-test.toml";
     assertConfigApplyThrows(invalidClvAddressPath, "[auto_capture]\ndisc_type = \"clv\"\nstart_address = \"123456\"\n");

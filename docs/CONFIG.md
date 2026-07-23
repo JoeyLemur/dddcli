@@ -87,8 +87,8 @@ USB options:
 
 - `--vid <id>` and `--pid <id>`: USB IDs, decimal or `0x` prefixed.
 - `--usb-device <path>`: preferred USB device path.
-- `--disk-buffer-queue-size <size>`: disk buffer queue size. Plain numbers are bytes; `mb` and `mib` suffixes are accepted.
-- `--small-usb-transfer-queue` / `--large-usb-transfer-queue`: choose reduced or configured USB queue size.
+- `--disk-buffer-queue-size <size>`: disk buffer queue size. Plain numbers are bytes; `mb` and `mib` suffixes are accepted. The value must be at least `6MiB`; `6MB` is smaller than that binary minimum.
+- `--small-usb-transfer-queue` / `--large-usb-transfer-queue`: choose reduced or configured USB queue size. This does not change the `6MiB` minimum disk buffer queue size.
 - `--small-usb-transfers` / `--large-usb-transfers`: choose USB transfer sizing.
 
 Capture options:

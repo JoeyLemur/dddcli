@@ -76,6 +76,18 @@ bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureF
         return false;
     }
 
+    // Calculate the device-aligned buffer layout before allocating buffers or creating output. The USB transfer
+    // pipeline requires one buffer for processing plus at least two in-flight buffers.
+    CalculateDesiredBufferCountAndSize(useSmallUsbTransfers, usbTransferQueueSizeInBytes, diskBufferQueueSizeInBytes, totalDiskBufferEntryCount, diskBufferSizeInBytes);
+    constexpr size_t minimumDiskBufferCount = 3;
+    if (diskBufferSizeInBytes == 0 || totalDiskBufferEntryCount < minimumDiskBufferCount)
+    {
+        Log().Error("StartCapture(): Disk buffer queue is too small for the USB transfer pipeline");
+        captureResult = TransferResult::ProgramError;
+        DisconnectFromDevice();
+        return false;
+    }
+
     // Attempt to create/open the output file
     captureOutputFile.clear();
     captureOutputFile.rdbuf()->pubsetbuf(0, 0);
@@ -87,10 +99,8 @@ bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureF
         return false;
     }
 
-    // Calculate the optimal read buffer size and number of disk buffers, and initialize the structures. We use an
-    // unusual case of wrapping an array new into a unique_ptr rather than std::vector here, as we have an atomic_flag
-    // member in the structure which can't be moved.
-    CalculateDesiredBufferCountAndSize(useSmallUsbTransfers, usbTransferQueueSizeInBytes, diskBufferQueueSizeInBytes, totalDiskBufferEntryCount, diskBufferSizeInBytes);
+    // Initialize the device-aligned disk buffers. We use an unusual case of wrapping an array new into a unique_ptr
+    // rather than std::vector here, as we have an atomic_flag member in the structure which can't be moved.
     diskBufferEntries.reset(new DiskBufferEntry[totalDiskBufferEntryCount]);
     for (size_t i = 0; i < totalDiskBufferEntryCount; ++i)
     {

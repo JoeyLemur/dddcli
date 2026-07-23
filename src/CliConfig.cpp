@@ -158,6 +158,17 @@ size_t parseSize(const std::string& value)
     return (size_t)parsed * multiplier;
 }
 
+size_t parseDiskBufferQueueSize(const std::string& value)
+{
+    constexpr size_t minimumDiskBufferQueueSize = 6 * 1024 * 1024;
+    size_t parsed = parseSize(value);
+    if (parsed < minimumDiskBufferQueueSize)
+    {
+        throw std::runtime_error("disk buffer queue size must be at least 6MiB: " + value);
+    }
+    return parsed;
+}
+
 CaptureFormatCli parseFormat(const std::string& value)
 {
     auto text = lower(trim(value));
@@ -284,7 +295,7 @@ bool applyCommandLineOption(ParsedCommandLine& parsed, int& index, int argc, cha
     else if (arg == "--vid") parsed.options.usbVid = parseU16(requireValue(index, argc, argv, arg));
     else if (arg == "--pid") parsed.options.usbPid = parseU16(requireValue(index, argc, argv, arg));
     else if (arg == "--usb-device") parsed.options.usbPreferredDevice = requireValue(index, argc, argv, arg);
-    else if (arg == "--disk-buffer-queue-size") parsed.options.diskBufferQueueSize = parseSize(requireValue(index, argc, argv, arg));
+    else if (arg == "--disk-buffer-queue-size") parsed.options.diskBufferQueueSize = parseDiskBufferQueueSize(requireValue(index, argc, argv, arg));
     else if (arg == "--small-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = true;
     else if (arg == "--large-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = false;
     else if (arg == "--small-usb-transfers") parsed.options.useSmallUsbTransfers = true;
@@ -352,7 +363,7 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     if (key == "usb.vid") options.usbVid = parseU16(stripQuotes(value));
     else if (key == "usb.pid") options.usbPid = parseU16(stripQuotes(value));
     else if (key == "usb.preferred_device") options.usbPreferredDevice = stripQuotes(value);
-    else if (key == "usb.disk_buffer_queue_size") options.diskBufferQueueSize = parseSize(stripQuotes(value));
+    else if (key == "usb.disk_buffer_queue_size") options.diskBufferQueueSize = parseDiskBufferQueueSize(stripQuotes(value));
     else if (key == "usb.use_small_usb_transfer_queue") options.useSmallUsbTransferQueue = parseBool(value);
     else if (key == "usb.use_small_usb_transfers") options.useSmallUsbTransfers = parseBool(value);
     else if (key == "capture.output_dir") options.outputDir = stripQuotes(value);
@@ -756,7 +767,7 @@ void printUsage()
         "  --duration <seconds>             stop manual capture after duration\n"
         "  --usb-device <path>              preferred USB device path\n"
         "  --vid <id> --pid <id>            USB IDs, decimal or 0x-prefixed\n"
-        "  --disk-buffer-queue-size <size>  disk buffer queue size, bytes/mb/mib\n"
+        "  --disk-buffer-queue-size <size>  disk queue; bytes/mb/mib, minimum 6MiB\n"
         "  --small-usb-transfer-queue       use reduced USB transfer queue\n"
         "  --large-usb-transfer-queue       use configured USB transfer queue\n"
         "  --small-usb-transfers            use small USB transfers\n"
