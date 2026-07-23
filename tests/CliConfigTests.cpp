@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "AutoCaptureOrchestration.h"
 #include "CliConfig.h"
 #include "PlayerSerial.h"
@@ -157,6 +160,35 @@ int main()
     assert(parsed.options.jsonOutput == "/tmp/capture.json");
     assert(parsed.options.durationSeconds.has_value());
     assert(parsed.options.durationSeconds.value() == 1);
+
+    const char* flagBeforeCaptureArgv[] = {
+        "dddcli",
+        "--output",
+        "out.lds",
+        "capture",
+    };
+    auto flagBeforeCaptureParsed = parseCommandLine(4, const_cast<char**>(flagBeforeCaptureArgv));
+    assert(flagBeforeCaptureParsed.command == "capture");
+    assert(flagBeforeCaptureParsed.options.output == "out.lds");
+
+    const char* flagBeforeAutoCaptureArgv[] = {
+        "dddcli",
+        "--disc-type",
+        "cav",
+        "--mode",
+        "partial",
+        "auto-capture",
+        "--end-address",
+        "70",
+    };
+    auto flagBeforeAutoCaptureParsed = parseCommandLine(8, const_cast<char**>(flagBeforeAutoCaptureArgv));
+    assert(flagBeforeAutoCaptureParsed.command == "auto-capture");
+    assert(flagBeforeAutoCaptureParsed.options.discType == DiscTypeCli::Cav);
+    assert(flagBeforeAutoCaptureParsed.options.autoCaptureMode == AutoCaptureModeCli::Partial);
+    assert(flagBeforeAutoCaptureParsed.options.endAddress == 70);
+
+    const char* captureExtraArgv[] = { "dddcli", "capture", "extra" };
+    assertParseThrows(captureExtraArgv, 3);
 
     const char* invalidDurationArgv[] = { "dddcli", "capture", "--duration", "10oops" };
     assertParseThrows(invalidDurationArgv, 4);
@@ -444,6 +476,67 @@ int main()
     assert(rawParsed.command == "player");
     assert(rawParsed.playerAction == "raw-command");
     assert(rawParsed.playerRawCommand == "?T");
+
+    const char* flagBeforePlayerArgv[] = {
+        "dddcli",
+        "--serial-device",
+        "/dev/ttyUSB0",
+        "--serial-speed",
+        "auto",
+        "player",
+        "stop",
+    };
+    auto flagBeforePlayerParsed = parseCommandLine(7, const_cast<char**>(flagBeforePlayerArgv));
+    assert(flagBeforePlayerParsed.command == "player");
+    assert(flagBeforePlayerParsed.playerAction == "stop");
+    assert(flagBeforePlayerParsed.options.serialDevice == "/dev/ttyUSB0");
+    assert(flagBeforePlayerParsed.options.serialSpeed == SerialSpeedCli::Auto);
+
+    const char* flagBetweenPlayerArgv[] = {
+        "dddcli",
+        "player",
+        "--serial-device",
+        "/dev/ttyUSB0",
+        "stop",
+    };
+    auto flagBetweenPlayerParsed = parseCommandLine(5, const_cast<char**>(flagBetweenPlayerArgv));
+    assert(flagBetweenPlayerParsed.command == "player");
+    assert(flagBetweenPlayerParsed.playerAction == "stop");
+    assert(flagBetweenPlayerParsed.options.serialDevice == "/dev/ttyUSB0");
+
+    const char* flagBetweenRawCommandArgv[] = {
+        "dddcli",
+        "player",
+        "raw-command",
+        "--serial-device",
+        "/dev/ttyUSB0",
+        "?T",
+    };
+    auto flagBetweenRawCommandParsed = parseCommandLine(6, const_cast<char**>(flagBetweenRawCommandArgv));
+    assert(flagBetweenRawCommandParsed.command == "player");
+    assert(flagBetweenRawCommandParsed.playerAction == "raw-command");
+    assert(flagBetweenRawCommandParsed.playerRawCommand == "?T");
+    assert(flagBetweenRawCommandParsed.options.serialDevice == "/dev/ttyUSB0");
+
+    const char* literalRawCommandArgv[] = {
+        "dddcli",
+        "player",
+        "raw-command",
+        "--",
+        "--serial-device",
+    };
+    auto literalRawCommandParsed = parseCommandLine(5, const_cast<char**>(literalRawCommandArgv));
+    assert(literalRawCommandParsed.command == "player");
+    assert(literalRawCommandParsed.playerAction == "raw-command");
+    assert(literalRawCommandParsed.playerRawCommand == "--serial-device");
+
+    const char* playerExtraArgv[] = { "dddcli", "player", "stop", "extra" };
+    assertParseThrows(playerExtraArgv, 4);
+    const char* rawExtraArgv[] = { "dddcli", "player", "raw-command", "?T", "extra" };
+    assertParseThrows(rawExtraArgv, 5);
+    const char* reorderedPositionalsArgv[] = { "dddcli", "stop", "player" };
+    assertParseThrows(reorderedPositionalsArgv, 3);
+
     assert(playerRawCommandFits(std::string(19, 'A')));
     assert(playerRawCommandFits(std::string(19, 'A') + "\r"));
     assert(!playerRawCommandFits(std::string(20, 'A')));

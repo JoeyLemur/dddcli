@@ -81,7 +81,19 @@ Auto-capture turns the player's on-screen display on by default. Use `--no-on-sc
 
 Interactive captures show one updating progress line on stderr. When stderr is redirected or piped through `tee`, captures emit newline progress about every 10 seconds; auto-capture progress includes `timecode=H:MM:SS` for CLV or `frame=<n>` for CAV once the player address is known. Successful auto-captures stop the player during cleanup.
 
+## Configuration
+
+An example config is provided at [dddcli.example.toml](dddcli.example.toml). Copy it to `${XDG_CONFIG_HOME:-$HOME/.config}/domesday-duplicator/dddcli.toml` for normal use, or pass it after the command for a one-off run:
+
+```sh
+./build/dddcli capture --config ./dddcli.example.toml --duration 10
+```
+
+Command-line flags override config values. See [Configuration](docs/CONFIG.md) for the supported keys and default path rules.
+
 ## Commands
+
+Flags may appear before, between, or after command words, so stable settings can stay in place while changing the command action.
 
 - `dddcli list-devices`: print visible Domesday Duplicator USB device paths.
 - `dddcli capture`: start a manual USB capture.
@@ -101,7 +113,7 @@ Supported capture formats are:
 
 If `--output` has no extension, the selected format extension is added. If no output path is provided, the tool creates a timestamped file under `--output-dir`, which defaults to the current directory. Generated filenames use `RF-Sample_YYYY-MM-DD_HH-MM-SS` or `TestData_YYYY-MM-DD_HH-MM-SS` when `--test-mode` is enabled.
 
-Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureInfo` for every capture, including the capture path, format, transfer result, duration, sample counts, clipping counts, and UTC creation timestamp. Auto-captures also populate `serialInfo` with player and disc fields; CAV metadata records `minFrameNumber` and `maxFrameNumber`, while CLV metadata records `minTimeCode` and `maxTimeCode` as player-reported timecodes normalized to seconds.
+Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureInfo` for every capture, including the capture path, format, transfer result, duration, transfer and disk-buffer counts, file size, sample count, sample min/max, clipping counts, sequence-marker presence, and UTC creation timestamp. Auto-captures also populate `serialInfo` with player and disc fields; CAV metadata records `minFrameNumber` and `maxFrameNumber`, while CLV metadata records `minTimeCode` and `maxTimeCode` as player-reported timecodes normalized to seconds.
 
 ## Documentation
 
@@ -109,7 +121,15 @@ Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureIn
 - [Player Control](docs/PLAYER_CONTROL.md)
 - [Auto Capture](docs/AUTO_CAPTURE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [USB Capture Performance Testing](docs/USB_CAPTURE_PERFORMANCE_TESTING.md)
-- [Hardware Test Checklist](docs/HARDWARE_TESTS.md)
+- [USB Capture Performance Testing](tests/manual/USB_CAPTURE_PERFORMANCE_TESTING.md)
+- [Hardware Test Checklist](tests/manual/HARDWARE_TESTS.md)
+
+## License and Attribution
+
+This codebase is derived from the original [DomesdayDuplicator](https://github.com/simoninns/DomesdayDuplicator) project by [Simon Inns](https://github.com/simoninns). The upstream project is licensed under the GNU General Public License v3.0; this derived command-line port preserves that license for the code carried forward from DomesdayDuplicator. It is distributed without warranty. See [LICENSE](LICENSE) for the full license text and [NOTICE](NOTICE) for attribution details.
+
+## AI Assistance
+
+Development of this command-line port was substantially assisted by OpenAI Codex and ChatGPT 5.5, working from Ed Powell's direction, testing, hardware context, and review.
 
 For contributor and agent guidance, see [AGENTS.md](AGENTS.md).

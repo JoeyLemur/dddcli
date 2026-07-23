@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "CliConfig.h"
 #include <algorithm>
 #include <chrono>
@@ -9,6 +12,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -263,6 +267,86 @@ std::string requireValue(int& index, int argc, char* argv[], const std::string& 
     return argv[++index];
 }
 
+bool applyCommandLineOption(ParsedCommandLine& parsed, int& index, int argc, char* argv[])
+{
+    std::string arg = argv[index];
+    if (arg == "--help" || arg == "-h")
+    {
+        parsed.command = "help";
+    }
+    else if (arg == "--config")
+    {
+        parsed.options.configPath = requireValue(index, argc, argv, arg);
+        parsed.options.configPathExplicit = true;
+    }
+    else if (arg == "--debug") parsed.options.debug = true;
+    else if (arg == "--quiet") parsed.options.quiet = true;
+    else if (arg == "--vid") parsed.options.usbVid = parseU16(requireValue(index, argc, argv, arg));
+    else if (arg == "--pid") parsed.options.usbPid = parseU16(requireValue(index, argc, argv, arg));
+    else if (arg == "--usb-device") parsed.options.usbPreferredDevice = requireValue(index, argc, argv, arg);
+    else if (arg == "--disk-buffer-queue-size") parsed.options.diskBufferQueueSize = parseSize(requireValue(index, argc, argv, arg));
+    else if (arg == "--small-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = true;
+    else if (arg == "--large-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = false;
+    else if (arg == "--small-usb-transfers") parsed.options.useSmallUsbTransfers = true;
+    else if (arg == "--large-usb-transfers") parsed.options.useSmallUsbTransfers = false;
+    else if (arg == "--output") parsed.options.output = requireValue(index, argc, argv, arg);
+    else if (arg == "--json") parsed.options.jsonOutput = requireValue(index, argc, argv, arg);
+    else if (arg == "--output-dir") parsed.options.outputDir = requireValue(index, argc, argv, arg);
+    else if (arg == "--format") parsed.options.captureFormat = parseFormat(requireValue(index, argc, argv, arg));
+    else if (arg == "--test-mode") parsed.options.testMode = true;
+    else if (arg == "--duration") parsed.options.durationSeconds = parsePositiveInt(requireValue(index, argc, argv, arg), "duration");
+    else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(index, argc, argv, arg);
+    else if (arg == "--serial-speed") parsed.options.serialSpeed = parseSerialSpeed(requireValue(index, argc, argv, arg));
+    else if (arg == "--player-profile") parsed.options.playerProfile = parsePlayerProfile(requireValue(index, argc, argv, arg));
+    else if (arg == "--disc-type") parsed.options.discType = parseDiscType(requireValue(index, argc, argv, arg));
+    else if (arg == "--mode") parsed.options.autoCaptureMode = parseAutoCaptureMode(requireValue(index, argc, argv, arg));
+    else if (arg == "--start-address") parsed.options.startAddressText = requireValue(index, argc, argv, arg);
+    else if (arg == "--end-address") parsed.options.endAddressText = requireValue(index, argc, argv, arg);
+    else if (arg == "--key-lock") parsed.options.keyLock = true;
+    else if (arg == "--on-screen-display") parsed.options.onScreenDisplay = true;
+    else if (arg == "--no-on-screen-display") parsed.options.onScreenDisplay = false;
+    else return false;
+    return true;
+}
+
+void applyPositionals(ParsedCommandLine& parsed, const std::vector<std::string>& positionals)
+{
+    if (parsed.command == "help")
+    {
+        return;
+    }
+    if (positionals.empty())
+    {
+        parsed.command = "help";
+        return;
+    }
+
+    parsed.command = positionals[0];
+    if (parsed.command != "player")
+    {
+        if (positionals.size() > 1)
+        {
+            throw std::runtime_error("unexpected argument: " + positionals[1]);
+        }
+        return;
+    }
+
+    if (positionals.size() > 1)
+    {
+        parsed.playerAction = positionals[1];
+    }
+    if (parsed.playerAction == "raw-command" && positionals.size() > 2)
+    {
+        parsed.playerRawCommand = positionals[2];
+    }
+
+    size_t expectedPositionals = parsed.playerAction == "raw-command" ? 3 : 2;
+    if (positionals.size() > expectedPositionals)
+    {
+        throw std::runtime_error("unexpected argument: " + positionals[expectedPositionals]);
+    }
+}
+
 void applyKeyValue(CliOptions& options, const std::string& key, const std::string& value)
 {
     if (key == "usb.vid") options.usbVid = parseU16(stripQuotes(value));
@@ -297,67 +381,28 @@ ParsedCommandLine parseCommandLineImpl(int argc, char* argv[], const CliOptions&
         parsed.options.configPath = defaultConfigPath();
     }
 
-    if (argc < 2)
-    {
-        parsed.command = "help";
-        return parsed;
-    }
-
-    parsed.command = argv[1];
-    if (parsed.command == "--help" || parsed.command == "-h")
-    {
-        parsed.command = "help";
-        return parsed;
-    }
-    int startIndex = 2;
-    if (parsed.command == "player" && argc > 2 && argv[2][0] != '-')
-    {
-        parsed.playerAction = argv[2];
-        startIndex = 3;
-        if (parsed.playerAction == "raw-command" && argc > 3)
-        {
-            parsed.playerRawCommand = argv[3];
-            startIndex = 4;
-        }
-    }
-
-    for (int i = startIndex; i < argc; ++i)
+    std::vector<std::string> positionals;
+    bool parseOptions = true;
+    for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
-        if (arg == "--help" || arg == "-h") parsed.command = "help";
-        else if (arg == "--config")
+        if (parseOptions && arg == "--")
         {
-            parsed.options.configPath = requireValue(i, argc, argv, arg);
-            parsed.options.configPathExplicit = true;
+            parseOptions = false;
+            continue;
         }
-        else if (arg == "--debug") parsed.options.debug = true;
-        else if (arg == "--quiet") parsed.options.quiet = true;
-        else if (arg == "--vid") parsed.options.usbVid = parseU16(requireValue(i, argc, argv, arg));
-        else if (arg == "--pid") parsed.options.usbPid = parseU16(requireValue(i, argc, argv, arg));
-        else if (arg == "--usb-device") parsed.options.usbPreferredDevice = requireValue(i, argc, argv, arg);
-        else if (arg == "--disk-buffer-queue-size") parsed.options.diskBufferQueueSize = parseSize(requireValue(i, argc, argv, arg));
-        else if (arg == "--small-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = true;
-        else if (arg == "--large-usb-transfer-queue") parsed.options.useSmallUsbTransferQueue = false;
-        else if (arg == "--small-usb-transfers") parsed.options.useSmallUsbTransfers = true;
-        else if (arg == "--large-usb-transfers") parsed.options.useSmallUsbTransfers = false;
-        else if (arg == "--output") parsed.options.output = requireValue(i, argc, argv, arg);
-        else if (arg == "--json") parsed.options.jsonOutput = requireValue(i, argc, argv, arg);
-        else if (arg == "--output-dir") parsed.options.outputDir = requireValue(i, argc, argv, arg);
-        else if (arg == "--format") parsed.options.captureFormat = parseFormat(requireValue(i, argc, argv, arg));
-        else if (arg == "--test-mode") parsed.options.testMode = true;
-        else if (arg == "--duration") parsed.options.durationSeconds = parsePositiveInt(requireValue(i, argc, argv, arg), "duration");
-        else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(i, argc, argv, arg);
-        else if (arg == "--serial-speed") parsed.options.serialSpeed = parseSerialSpeed(requireValue(i, argc, argv, arg));
-        else if (arg == "--player-profile") parsed.options.playerProfile = parsePlayerProfile(requireValue(i, argc, argv, arg));
-        else if (arg == "--disc-type") parsed.options.discType = parseDiscType(requireValue(i, argc, argv, arg));
-        else if (arg == "--mode") parsed.options.autoCaptureMode = parseAutoCaptureMode(requireValue(i, argc, argv, arg));
-        else if (arg == "--start-address") parsed.options.startAddressText = requireValue(i, argc, argv, arg);
-        else if (arg == "--end-address") parsed.options.endAddressText = requireValue(i, argc, argv, arg);
-        else if (arg == "--key-lock") parsed.options.keyLock = true;
-        else if (arg == "--on-screen-display") parsed.options.onScreenDisplay = true;
-        else if (arg == "--no-on-screen-display") parsed.options.onScreenDisplay = false;
-        else throw std::runtime_error("unknown option: " + arg);
+        if (parseOptions && applyCommandLineOption(parsed, i, argc, argv))
+        {
+            continue;
+        }
+        if (parseOptions && arg.starts_with("-"))
+        {
+            throw std::runtime_error("unknown option: " + arg);
+        }
+        positionals.push_back(arg);
     }
+
+    applyPositionals(parsed, positionals);
     applyAddressFields(parsed.options);
     if (validate)
     {
@@ -688,7 +733,8 @@ std::string transferResultToString(UsbDeviceBase::TransferResult result)
 void printUsage()
 {
     std::cout <<
-        "Usage: dddcli <command> [options]\n"
+        "Usage: dddcli [options] <command> [options]\n"
+        "       Options may appear before, between, or after command words.\n"
         "\n"
         "Commands:\n"
         "  list-devices\n"

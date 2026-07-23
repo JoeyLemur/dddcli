@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "CliConfig.h"
 #include "ConsoleLogger.h"
 #include "AutoCaptureOrchestration.h"
@@ -89,7 +92,6 @@ bool startCapture(UsbDeviceBase& usb, const CliOptions& options, const std::file
         options.usbPreferredDevice,
         options.testMode,
         options.useSmallUsbTransfers,
-        options.useAsyncFileIo,
         usbQueueSize(options),
         options.diskBufferQueueSize);
 }

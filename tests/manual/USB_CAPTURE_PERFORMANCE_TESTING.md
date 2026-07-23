@@ -136,7 +136,7 @@ Expected:
 - no sequence mismatch, USB transfer failure, or file write error
 - no large unexpected drop in progress rate over time
 
-Repeat once while the desktop is idle and once while normal background services are running. Avoid artificial stress tools for acceptance; they are useful only for margin testing.
+Repeat once while the desktop is idle and once during a normal desktop workload. Avoid artificial stress tools for acceptance; they are useful only for margin testing.
 
 ## 5. Format Matrix
 

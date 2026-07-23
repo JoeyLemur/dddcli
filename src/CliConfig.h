@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 #pragma once
 
 #include "UsbDeviceBase.h"
@@ -69,7 +72,6 @@ struct CliOptions
     size_t diskBufferQueueSize = 256 * 1024 * 1024;
     bool useSmallUsbTransferQueue = false;
     bool useSmallUsbTransfers = true;
-    bool useAsyncFileIo = false;
 
     std::filesystem::path output;
     std::filesystem::path jsonOutput;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 #pragma once
 #include "ILogger.h"
 #include <cstdint>
@@ -6,13 +9,10 @@
 #include <mutex>
 #include <fstream>
 #include <optional>
+#include <sched.h>
 #include <string>
 #include <vector>
 #include <atomic>
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#endif
 
 class UsbDeviceBase
 {
@@ -52,7 +52,7 @@ public:
     void SendConfigurationCommand(const std::string& preferredDevicePath, bool testMode);
 
     // Capture methods
-    bool StartCapture(const std::filesystem::path& filePath, CaptureFormat format, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, bool useAsyncFileIo, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes);
+    bool StartCapture(const std::filesystem::path& filePath, CaptureFormat format, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes);
     void StopCapture();
     bool GetTransferInProgress() const;
     TransferResult GetTransferResult() const;
@@ -81,19 +81,11 @@ protected:
         std::vector<uint8_t> readBuffer;
         std::atomic_flag isDiskBufferFull;
         std::atomic_flag dumpingBuffer;
-#ifdef _WIN32
-        OVERLAPPED diskWriteOverlappedBuffer;
-        bool diskWriteInProgress = false;
-#endif
     };
     struct ThreadPriorityRestoreInfo
     {
-#ifdef _WIN32
-        int originalPriority;
-#else
         int oldSchedPolicy;
         sched_param oldSchedParam;
-#endif
     };
 
 protected:
@@ -136,13 +128,6 @@ private:
         Failed,
     };
 
-    // Structures
-    struct ProcessPriorityRestoreInfo
-    {
-#ifdef _WIN32
-        int originalPriorityClass;
-#endif
-    };
     struct LockedMemoryRegion
     {
         void* baseAddress = nullptr;
@@ -159,11 +144,6 @@ private:
     bool ProcessSequenceMarkersAndUpdateSampleMetrics(size_t diskBufferIndex, size_t& processedSampleCount, uint16_t& minValue, uint16_t& maxValue, size_t& minClippedCount, size_t& maxClippedCount);
     bool VerifyTestSequence(size_t diskBufferIndex);
     bool ConvertRawSampleData(size_t diskBufferIndex, CaptureFormat captureFormat, std::vector<uint8_t>& outputBuffer) const;
-
-    // Utility methods
-    bool SetCurrentProcessRealtimePriority(ProcessPriorityRestoreInfo& priorityRestoreInfo);
-    void RestoreCurrentProcessPriority(const ProcessPriorityRestoreInfo& priorityRestoreInfo);
-
 private:
     // Logging state
     const ILogger& log;
@@ -177,7 +157,6 @@ private:
 
     // Capture status
     bool transferInProgress = false;
-    bool useWindowsOverlappedFileIo = false;
     std::atomic<TransferResult> captureResult = TransferResult::Success;
     std::atomic<size_t> transferCount = 0;
     std::atomic<size_t> transferBufferWrittenCount = 0;
@@ -207,19 +186,11 @@ private:
     std::unique_ptr<DiskBufferEntry[]> diskBufferEntries;
 
     // Conversion buffer state
-#ifdef _WIN32
-    static const size_t conversionBufferCount = 2;
-#else
     static const size_t conversionBufferCount = 1;
-#endif
-    size_t conversionBufferIndex = 0;
     std::vector<uint8_t> conversionBuffers[conversionBufferCount];
 
     // Capture output file state
     std::ofstream captureOutputFile;
-#ifdef _WIN32
-    HANDLE windowsCaptureOutputFileHandle;
-#endif
 
     // Sequence/test data state
     SequenceState sequenceState = SequenceState::Sync;
@@ -234,14 +205,6 @@ private:
     std::vector<uint8_t> capturedBufferSample;
 
     // Locked memory state
-    size_t lockedMemorySizeInBytes = 0;
-    size_t lockedMemoryBufferCount = 0;
     std::vector<LockedMemoryRegion> lockedMemoryRegions;
     bool memoryLockingEnabled = true;
-    size_t originalProcessMinimumWorkingSetSizeInBytes = 0;
-    size_t originalProcessMaximumWorkingSetSizeInBytes = 0;
-
-    // Process priority state
-    ProcessPriorityRestoreInfo processPriorityRestoreInfo;
-    bool boostedProcessPriority = false;
 };

@@ -1,5 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+# SPDX-License-Identifier: GPL-3.0-only
+
 cmake_minimum_required(VERSION 3.16)
 project(dddcli VERSION 1.0 LANGUAGES CXX)
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "dddcli is supported only on Linux.")
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

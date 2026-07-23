@@ -1,9 +1,17 @@
-# Example dddcli configuration.
+# SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Example dddcli configuration. Active values below match the built-in
+# defaults or safe no-op settings; uncomment the local machine/range examples
+# only when you want them to apply to every matching command.
 #
-# Copy this to one of the default config locations:
-#   $XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml
-#   $HOME/.config/domesday-duplicator/dddcli.toml
-#   ./dddcli.toml
+# Copy this file to the selected default config path for your environment:
+#   $XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml   # if XDG_CONFIG_HOME is set
+#   $HOME/.config/domesday-duplicator/dddcli.toml      # otherwise, if HOME is set
+#   ./dddcli.toml                                      # otherwise
+#
+# Or test it for one command:
+#   dddcli capture --config ./dddcli.example.toml --duration 10
 #
 # Command-line flags override values from this file.
 
@@ -20,19 +28,24 @@ output_dir = "."
 format = "lds"
 json = ""
 test_mode = false
-# Remove this line for captures that should run until interrupted.
-duration_seconds = 10
+# Uncomment to stop manual captures automatically instead of running until
+# interrupted.
+# duration_seconds = 10
 
 [player]
-serial_device = "/dev/ttyUSB0"
+# Uncomment and adjust before using player or auto-capture commands.
+# serial_device = "/dev/ttyUSB0"
 serial_speed = "auto"
 profile = "auto"
 
 [auto_capture]
-disc_type = "clv"
-mode = "partial"
-# CLV addresses may be seconds, HMMSS, or HMMSSFF. CAV addresses are frames.
-start_address = "60"
-end_address = "90"
+mode = "whole-disc"
+# Omit disc_type to let auto-capture detect the loaded disc type. Uncomment to
+# require the loaded disc to match.
+# disc_type = "clv"
+# For mode = "partial", set both addresses. CLV addresses may be seconds,
+# HMMSS, or HMMSSFF. CAV addresses are frames.
+# start_address = "60"
+# end_address = "90"
 key_lock = false
 on_screen_display = true

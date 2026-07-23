@@ -1,13 +1,13 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "UsbDeviceBase.h"
-#ifdef _WIN32
-#include <memoryapi.h>
-#else
 #include <cerrno>
-#include <sched.h>
 #include <cstring>
+#include <pthread.h>
+#include <sched.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
-#endif
 #include <algorithm>
 #include <iostream>
 #include <thread>
@@ -28,16 +28,8 @@ UsbDeviceBase::~UsbDeviceBase()
 //----------------------------------------------------------------------------------------------------------------------
 bool UsbDeviceBase::Initialize(uint16_t vendorId, uint16_t productId)
 {
-    // Attempt to retrieve the initial process working set allocation
-#ifdef _WIN32
-    BOOL getProcessWorkingSetSizeReturn = GetProcessWorkingSetSize(GetCurrentProcess(), &originalProcessMinimumWorkingSetSizeInBytes, &originalProcessMaximumWorkingSetSizeInBytes);
-    if (getProcessWorkingSetSizeReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("GetProcessWorkingSetSize failed with error code {0}", lastError);
-        return false;
-    }
-#endif
+    (void)vendorId;
+    (void)productId;
     return true;
 }
 
@@ -67,7 +59,7 @@ void UsbDeviceBase::SendConfigurationCommand(const std::string& preferredDeviceP
 //----------------------------------------------------------------------------------------------------------------------
 // Capture methods
 //----------------------------------------------------------------------------------------------------------------------
-bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureFormat format, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, bool useAsyncFileIo, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes)
+bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureFormat format, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes)
 {
     // If we're already performing a capture, abort any further processing.
     if (transferInProgress)
@@ -84,39 +76,16 @@ bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureF
         return false;
     }
 
-    // Flag whether we should be using asynchronous IO (Windows only)
-#ifdef _WIN32
-    useWindowsOverlappedFileIo = useAsyncFileIo;
-#endif
-
     // Attempt to create/open the output file
-#ifdef _WIN32
-    if (useWindowsOverlappedFileIo)
+    captureOutputFile.clear();
+    captureOutputFile.rdbuf()->pubsetbuf(0, 0);
+    captureOutputFile.open(filePath, std::ios::out | std::ios::trunc | std::ios::binary);
+    if (!captureOutputFile.is_open())
     {
-        windowsCaptureOutputFileHandle = CreateFileW(filePath.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_OVERLAPPED, NULL);
-        if (windowsCaptureOutputFileHandle == INVALID_HANDLE_VALUE)
-        {
-            DWORD lastError = GetLastError();
-            Log().Error("CreateFileW returned {0} with error code {1}.", windowsCaptureOutputFileHandle, lastError);
-            captureResult = TransferResult::FileCreationError;
-            return false;
-        }
+        Log().Error("StartCapture(): Failed to create the output file at path {0}", filePath);
+        captureResult = TransferResult::FileCreationError;
+        return false;
     }
-    else
-    {
-#endif
-        captureOutputFile.clear();
-        captureOutputFile.rdbuf()->pubsetbuf(0, 0);
-        captureOutputFile.open(filePath, std::ios::out | std::ios::trunc | std::ios::binary);
-        if (!captureOutputFile.is_open())
-        {
-            Log().Error("StartCapture(): Failed to create the output file at path {0}", filePath);
-            captureResult = TransferResult::FileCreationError;
-            return false;
-        }
-#ifdef _WIN32
-    }
-#endif
 
     // Calculate the optimal read buffer size and number of disk buffers, and initialize the structures. We use an
     // unusual case of wrapping an array new into a unique_ptr rather than std::vector here, as we have an atomic_flag
@@ -128,14 +97,6 @@ bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureF
         DiskBufferEntry& entry = diskBufferEntries[i];
         entry.readBuffer.resize(diskBufferSizeInBytes);
         entry.isDiskBufferFull.clear();
-#ifdef _WIN32
-        entry.diskWriteInProgress = false;
-        if (useWindowsOverlappedFileIo)
-        {
-            entry.diskWriteOverlappedBuffer = {};
-            entry.diskWriteOverlappedBuffer.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
-        }
-#endif
     }
 
     // Record the capture settings
@@ -193,36 +154,10 @@ void UsbDeviceBase::StopCapture()
     captureThreadRunning.wait(true);
 
     // Release our memory holding the disk buffers
-#ifdef _WIN32
-    if (useWindowsOverlappedFileIo)
-    {
-        for (size_t i = 0; i < totalDiskBufferEntryCount; ++i)
-        {
-            DiskBufferEntry& entry = diskBufferEntries[i];
-            CloseHandle(entry.diskWriteOverlappedBuffer.hEvent);
-        }
-    }
-#endif
     diskBufferEntries.reset();
 
     // Close the output file
-#ifdef _WIN32
-    if (useWindowsOverlappedFileIo)
-    {
-        BOOL closeHandleReturn = CloseHandle(windowsCaptureOutputFileHandle);
-        if (closeHandleReturn == 0)
-        {
-            DWORD lastError = GetLastError();
-            Log().Error("CloseHandle failed with error code {0}.", lastError);
-        }
-    }
-    else
-    {
-#endif
-        captureOutputFile.close();
-#ifdef _WIN32
-    }
-#endif
+    captureOutputFile.close();
 
     // Disconnect from the target device
     DisconnectFromDevice();
@@ -276,13 +211,6 @@ void UsbDeviceBase::CaptureThread()
     }
     LockMemoryBufferIntoPhysicalMemory(diskBufferEntries.get(), sizeof(diskBufferEntries[0]) * totalDiskBufferEntryCount);
     LockMemoryBufferIntoPhysicalMemory(this, sizeof(*this));
-
-    // Attempt to boost the process priority to realtime
-    boostedProcessPriority = SetCurrentProcessRealtimePriority(processPriorityRestoreInfo);
-    if (!boostedProcessPriority)
-    {
-        Log().Warning("CaptureThread(): Failed to boost process priority");
-    }
 
     // Record that a capture process is starting
     Log().Info("CaptureThread(): Starting capture process");
@@ -407,11 +335,7 @@ void UsbDeviceBase::CaptureThread()
         }
 
         // Yield the remainder of the timeslice, to help keep CPU resources free while we try and spin down.
-#ifdef _WIN32
-        Sleep(0);
-#else
         sched_yield();
-#endif
     }
 
     // Wait for our spawned threads to terminate
@@ -424,12 +348,6 @@ void UsbDeviceBase::CaptureThread()
         result = TransferResult::Success;
     }
     captureResult = result;
-
-    // Restore the original process priority settings
-    if (boostedProcessPriority)
-    {
-        RestoreCurrentProcessPriority(processPriorityRestoreInfo);
-    }
 
     // Release all our memory buffer locks
     for (size_t i = 0; i < conversionBufferCount; ++i)
@@ -631,9 +549,8 @@ void UsbDeviceBase::ProcessingThread()
     while (!processingFailure && !transferComplete)
     {
         // If processing has been requested to stop, and we've reached the end of the buffered data, or we're being
-        // stopped forcefully, break out of the processing loop. Note that if the stop isn't forceful, we let the
-        // current loop iteration complete to allow our current pending write to be "flushed" in the case of overlapped
-        // disk IO.
+        // stopped forcefully, break out of the processing loop. If the stop isn't forceful, let the current loop
+        // iteration complete so the current disk write can finish cleanly.
         DiskBufferEntry& bufferEntry = diskBufferEntries[currentDiskBuffer];
         bool flushOnly = false;
         if (processingStopRequested.test())
@@ -706,7 +623,7 @@ void UsbDeviceBase::ProcessingThread()
             }
 
             // Convert the sample data into the requested data format
-            auto& currentConversionBuffer = conversionBuffers[conversionBufferIndex];
+            auto& currentConversionBuffer = conversionBuffers[0];
             if (!ConvertRawSampleData(currentDiskBuffer, captureFormat, currentConversionBuffer))
             {
                 SetProcessingFinished(TransferResult::ProgramError);
@@ -715,121 +632,28 @@ void UsbDeviceBase::ProcessingThread()
             }
 
             // Write the data to the output file
-#ifdef _WIN32
-            if (useWindowsOverlappedFileIo)
+            captureOutputFile.write((const char*)currentConversionBuffer.data(), currentConversionBuffer.size());
+            if (!captureOutputFile.good())
             {
-                // Append to the end of the file using overlapped file IO. The request is queued here, not completed.
-                bufferEntry.diskWriteOverlappedBuffer.Offset = 0xFFFFFFFF;
-                bufferEntry.diskWriteOverlappedBuffer.OffsetHigh = 0xFFFFFFFF;
-                BOOL writeFileReturn = WriteFile(windowsCaptureOutputFileHandle, currentConversionBuffer.data(), (DWORD)currentConversionBuffer.size(), NULL, &bufferEntry.diskWriteOverlappedBuffer);
-                DWORD lastError = GetLastError();
-                if ((writeFileReturn != 0) || (lastError != ERROR_IO_PENDING))
-                {
-                    Log().Error("WriteFile returned {0} with error code {1}.", writeFileReturn, lastError);
-                    SetProcessingFinished(TransferResult::FileWriteError);
-                    processingFailure = true;
-                    continue;
-                }
-                bufferEntry.diskWriteInProgress = true;
+                Log().Error("ProcessingThread(): An error occurred when writing to the output file");
+                SetProcessingFinished(TransferResult::FileWriteError);
+                processingFailure = true;
+                continue;
             }
-            else
-            {
-#endif
-                // Perform the file write in a blocking operation
-                captureOutputFile.write((const char*)currentConversionBuffer.data(), currentConversionBuffer.size());
-                if (!captureOutputFile.good())
-                {
-                    Log().Error("ProcessingThread(): An error occurred when writing to the output file");
-                    SetProcessingFinished(TransferResult::FileWriteError);
-                    processingFailure = true;
-                    continue;
-                }
 
-                // Mark the disk buffer as empty, notifying the USB transfer thread in case it's blocking waiting for this
-                // buffer to be free.
-                bufferEntry.isDiskBufferFull.clear();
-                bufferEntry.isDiskBufferFull.notify_all();
+            // Mark the disk buffer as empty, notifying the USB transfer thread in case it's blocking waiting for this
+            // buffer to be free.
+            bufferEntry.isDiskBufferFull.clear();
+            bufferEntry.isDiskBufferFull.notify_all();
 
-                // Add the totals from this buffer to the transfer statistics
-                ++transferBufferWrittenCount;
-                transferFileSizeWrittenInBytes += currentConversionBuffer.size();
-#ifdef _WIN32
-            }
-#endif
+            // Add the totals from this buffer to the transfer statistics
+            ++transferBufferWrittenCount;
+            transferFileSizeWrittenInBytes += currentConversionBuffer.size();
         }
-
-        // If we're using overlapped file IO, complete the previously submitted write operation.
-#ifdef _WIN32
-        if (useWindowsOverlappedFileIo)
-        {
-            // Retrive the previous disk buffer entry
-            size_t lastBufferIndex = (currentDiskBuffer + (totalDiskBufferEntryCount - 1)) % totalDiskBufferEntryCount;
-            size_t lastConversionBufferIndex = (conversionBufferIndex + (conversionBufferCount - 1)) % conversionBufferCount;
-            DiskBufferEntry& lastBufferEntry = diskBufferEntries[lastBufferIndex];
-
-            // If the previous disk buffer entry had an overlapped write in progress, block waiting for it to complete
-            // and check the result.
-            if (lastBufferEntry.diskWriteInProgress)
-            {
-                // Block to check the result of the previous disk write operation
-                DWORD bytesTransferred = 0;
-                BOOL getOverlappedResultReturn = GetOverlappedResult(windowsCaptureOutputFileHandle, &lastBufferEntry.diskWriteOverlappedBuffer, &bytesTransferred, TRUE);
-                if (getOverlappedResultReturn == 0)
-                {
-                    DWORD lastError = GetLastError();
-                    Log().Error("GetOverlappedResult failed with error code {0}.", lastError);
-                    SetProcessingFinished(TransferResult::FileWriteError);
-                    processingFailure = true;
-                    continue;
-                }
-
-                // Ensure that the correct number of bytes were written. This should always be the case if it succeeded,
-                // but we check anyway.
-                auto& lastConversionBuffer = conversionBuffers[lastConversionBufferIndex];
-                if (bytesTransferred != lastConversionBuffer.size())
-                {
-                    Log().Error("ProcessingThread(): Expected {0} bytes written to disk but only {1} bytes were saved from buffer index {2}.", lastConversionBuffer.size(), bytesTransferred, lastBufferIndex);
-                    SetProcessingFinished(TransferResult::FileWriteError);
-                    processingFailure = true;
-                    continue;
-                }
-
-                // Mark the previous disk buffer as empty, notifying the USB transfer thread in case it's blocking
-                // waiting for this buffer to be free.
-                lastBufferEntry.diskWriteInProgress = false;
-                lastBufferEntry.isDiskBufferFull.clear();
-                lastBufferEntry.isDiskBufferFull.notify_all();
-
-                // Add the totals from this last buffer to the transfer statistics
-                ++transferBufferWrittenCount;
-                transferFileSizeWrittenInBytes += lastConversionBuffer.size();
-            }
-        }
-#endif
 
         // Advance to the next disk buffer in the queue
         currentDiskBuffer = (currentDiskBuffer + 1) % totalDiskBufferEntryCount;
-#ifdef _WIN32
-        if (useWindowsOverlappedFileIo)
-        {
-            conversionBufferIndex = (conversionBufferIndex + 1) % conversionBufferCount;
-        }
-#endif
     }
-
-    // If we're using overlapped file IO and a processing failure occurred, cancel any IO operations still in progress
-    // on the output file.
-#ifdef _WIN32
-    if (useWindowsOverlappedFileIo && processingFailure)
-    {
-        BOOL cancelIoReturn = CancelIo(windowsCaptureOutputFileHandle);
-        if (cancelIoReturn == 0)
-        {
-            DWORD lastError = GetLastError();
-            Log().Error("CancelIo failed with error code {0}.", lastError);
-        }
-    }
-#endif
 
     // If we've been requested to stop the capture process, and an error hasn't been flagged, mark the process as
     // successful.
@@ -1116,47 +940,13 @@ bool UsbDeviceBase::LockMemoryBufferIntoPhysicalMemory(void* baseAddress, size_t
         return true;
     }
 
-#ifdef _WIN32
-    // Retrieve the Windows page allocation size
-    SYSTEM_INFO sysInfo;
-    GetSystemInfo(&sysInfo);
-    size_t systemPageSizeInBytes = (size_t)sysInfo.dwPageSize;
-
-    // Increase the process working set size on Windows, to allow for the extra allocation required by the locked
-    // buffers. If we don't do this, VirtualLock will fail if we exceed the initial allocation. Note that since memory
-    // allocations may straddle page boundaries, we pad out an extra two memory pages per locked region.
-    size_t workingSetSizeIncreaseOverBaseline = (lockedMemorySizeInBytes + sizeInBytes) + (systemPageSizeInBytes * 2 * (lockedMemoryBufferCount + 1));
-    size_t newMinWorkingSetSize = originalProcessMinimumWorkingSetSizeInBytes + workingSetSizeIncreaseOverBaseline;
-    size_t newMaxWorkingSetSize = originalProcessMaximumWorkingSetSizeInBytes + workingSetSizeIncreaseOverBaseline;
-    BOOL setProcessWorkingSetSizeReturn = SetProcessWorkingSetSize(GetCurrentProcess(), newMinWorkingSetSize, newMaxWorkingSetSize);
-    if (setProcessWorkingSetSizeReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("SetProcessWorkingSetSize failed with error code {0}", lastError);
-        return false;
-    }
-#endif
-
     // Lock the target memory buffer into physical memory
-#ifdef _WIN32
-    BOOL virtualLockReturn = VirtualLock(baseAddress, sizeInBytes);
-    if (virtualLockReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("VirtualLock failed with error code {0}", lastError);
-        return false;
-    }
-#else
     if (mlock(baseAddress, sizeInBytes) == -1)
     {
         Log().Error("mlock failed for {0} bytes: {1}", sizeInBytes, std::strerror(errno));
         return false;
     }
-#endif
 
-    // Increase the totals of locked memory
-    lockedMemorySizeInBytes += sizeInBytes;
-    ++lockedMemoryBufferCount;
     lockedMemoryRegions.push_back({ baseAddress, sizeInBytes });
     return true;
 }
@@ -1175,50 +965,14 @@ void UsbDeviceBase::UnlockMemoryBuffer(void* baseAddress, size_t sizeInBytes)
     }
 
     // Release the lock on the target memory buffer
-#ifdef _WIN32
-    BOOL virtualUnlockReturn = VirtualUnlock(baseAddress, sizeInBytes);
-    if (virtualUnlockReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("VirtualUnlock failed with error code {0}", lastError);
-        return;
-    }
-#else
     munlock(baseAddress, sizeInBytes);
-#endif
 
-    // Decrease the totals of locked memory
-    lockedMemorySizeInBytes -= sizeInBytes;
-    --lockedMemoryBufferCount;
     lockedMemoryRegions.erase(region);
-
-#ifdef _WIN32
-    // Retrieve the Windows page allocation size
-    SYSTEM_INFO sysInfo;
-    GetSystemInfo(&sysInfo);
-    size_t systemPageSizeInBytes = (size_t)sysInfo.dwPageSize;
-
-    // Reduce the process working set size on Windows
-    size_t workingSetSizeIncreaseOverBaseline = (lockedMemorySizeInBytes + sizeInBytes) + (systemPageSizeInBytes * 2 * (lockedMemoryBufferCount + 1));
-    size_t newMinWorkingSetSize = originalProcessMinimumWorkingSetSizeInBytes + workingSetSizeIncreaseOverBaseline;
-    size_t newMaxWorkingSetSize = originalProcessMaximumWorkingSetSizeInBytes + workingSetSizeIncreaseOverBaseline;
-    BOOL setProcessWorkingSetSizeReturn = SetProcessWorkingSetSize(GetCurrentProcess(), newMinWorkingSetSize, newMaxWorkingSetSize);
-    if (setProcessWorkingSetSizeReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("SetProcessWorkingSetSize failed with error code {0}", lastError);
-        return;
-    }
-#endif
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 bool UsbDeviceBase::CheckMemoryLockLimit(size_t requiredLockSizeInBytes) const
 {
-#ifdef _WIN32
-    (void)requiredLockSizeInBytes;
-    return true;
-#else
     rlimit memoryLockLimit{};
     if (getrlimit(RLIMIT_MEMLOCK, &memoryLockLimit) != 0)
     {
@@ -1240,100 +994,9 @@ bool UsbDeviceBase::CheckMemoryLockLimit(size_t requiredLockSizeInBytes) const
         (unsigned long long)requiredLockSizeInBytes,
         hardLimit);
     return false;
-#endif
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-#ifdef _WIN32
-bool UsbDeviceBase::SetCurrentProcessRealtimePriority(ProcessPriorityRestoreInfo& priorityRestoreInfo)
-{
-    // Request the realtime priority class on Windows. If the process doesn't have administrator rights, we may not
-    // obtain realtime priority, but in that case the call will still succeed, and give us the highest priority class
-    // we can obtain with the current process privileges.
-    int originalPriorityClass = GetPriorityClass(GetCurrentProcess());
-    int requestedPriorityClass = REALTIME_PRIORITY_CLASS;
-    BOOL setPriorityClassReturn = SetPriorityClass(GetCurrentProcess(), requestedPriorityClass);
-    if (setPriorityClassReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("SetPriorityClass failed with error code {0}", lastError);
-        return false;
-    }
-
-    // Confirm the priority class we ended up obtaining
-    int newPriorityClass = GetPriorityClass(GetCurrentProcess());
-    priorityRestoreInfo.originalPriorityClass = originalPriorityClass;
-    Log().Info("SetCurrentProcessRealtimePriority: Requesting process priority {0} gave us {1}", requestedPriorityClass, newPriorityClass);
-    return true;
-}
-#endif
-
-//----------------------------------------------------------------------------------------------------------------------
-#ifndef _WIN32
-bool UsbDeviceBase::SetCurrentProcessRealtimePriority(ProcessPriorityRestoreInfo& priorityRestoreInfo)
-{
-    // Process priority is not a supported concept on a Linux-based OS
-    return true;
-}
-#endif
-
-//----------------------------------------------------------------------------------------------------------------------
-#ifdef _WIN32
-void UsbDeviceBase::RestoreCurrentProcessPriority(const ProcessPriorityRestoreInfo& priorityRestoreInfo)
-{
-    // Restore the original process priority class
-    BOOL setPriorityClassReturn = SetPriorityClass(GetCurrentProcess(), priorityRestoreInfo.originalPriorityClass);
-    if (setPriorityClassReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("SetPriorityClass failed with error code {0}", lastError);
-        return;
-    }
-}
-#endif
-
-//----------------------------------------------------------------------------------------------------------------------
-#ifndef _WIN32
-void UsbDeviceBase::RestoreCurrentProcessPriority(const ProcessPriorityRestoreInfo& priorityRestoreInfo)
-{
-    // Process priority is not a supported concept on a Linux-based OS
-}
-#endif
-
-//----------------------------------------------------------------------------------------------------------------------
-#ifdef _WIN32
-bool UsbDeviceBase::SetCurrentThreadRealtimePriority(ThreadPriorityRestoreInfo& priorityRestoreInfo)
-{
-    // Retrieve the current thread priority
-    HANDLE currentThreadHandle = GetCurrentThread();
-    int originalThreadPriority = GetThreadPriority(currentThreadHandle);
-    if (originalThreadPriority == THREAD_PRIORITY_ERROR_RETURN)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("GetThreadPriority failed with error code {0}", lastError);
-        return false;
-    }
-
-    // Attempt to increase thread priority to time critical
-    int requestedPriority = THREAD_PRIORITY_TIME_CRITICAL;
-    BOOL setThreadPriorityReturn = SetThreadPriority(currentThreadHandle, requestedPriority);
-    if (setThreadPriorityReturn == 0)
-    {
-        DWORD lastError = GetLastError();
-        Log().Error("SetThreadPriority failed with error code {0}", lastError);
-        return false;
-    }
-
-    // Confirm the thread priority we ended up obtaining
-    int newThreadPriority = GetThreadPriority(currentThreadHandle);
-    priorityRestoreInfo.originalPriority = originalThreadPriority;
-    Log().Info("SetCurrentThreadRealtimePriority: Requesting thread priority {0} gave us {1}", requestedPriority, newThreadPriority);
-    return true;
-}
-#endif
-
-//----------------------------------------------------------------------------------------------------------------------
-#ifndef _WIN32
 bool UsbDeviceBase::SetCurrentThreadRealtimePriority(ThreadPriorityRestoreInfo& priorityRestoreInfo)
 {
     // Retrieve the current scheduling policy for the calling thread
@@ -1367,18 +1030,8 @@ bool UsbDeviceBase::SetCurrentThreadRealtimePriority(ThreadPriorityRestoreInfo& 
     }
     return true;
 }
-#endif
 
 //----------------------------------------------------------------------------------------------------------------------
-#ifdef _WIN32
-void UsbDeviceBase::RestoreCurrentThreadPriority(const ThreadPriorityRestoreInfo& priorityRestoreInfo)
-{
-    SetThreadPriority(GetCurrentThread(), priorityRestoreInfo.originalPriority);
-}
-#endif
-
-//----------------------------------------------------------------------------------------------------------------------
-#ifndef _WIN32
 void UsbDeviceBase::RestoreCurrentThreadPriority(const ThreadPriorityRestoreInfo& priorityRestoreInfo)
 {
     if (pthread_setschedparam(pthread_self(), priorityRestoreInfo.oldSchedPolicy, &priorityRestoreInfo.oldSchedParam) != 0)
@@ -1386,4 +1039,3 @@ void UsbDeviceBase::RestoreCurrentThreadPriority(const ThreadPriorityRestoreInfo
         Log().Warning("RestoreCurrentThreadPriority: Unable to restore original scheduling policy");
     }
 }
-#endif

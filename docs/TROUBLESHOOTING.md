@@ -221,7 +221,7 @@ captureuser hard rtprio 80
 @domesday hard rtprio 80
 ```
 
-Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their inherited limits, so start a fresh login session before re-checking `ulimit -l` and `ulimit -r`. If a desktop-launched app does not inherit the configured limit, launch it from a fresh login shell or configure its launcher/service limit explicitly. For a systemd service, set `LimitMEMLOCK=512M` and `LimitRTPRIO=80` in the service unit.
+Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their inherited limits, so start a fresh login session before re-checking `ulimit -l` and `ulimit -r`. Run `dddcli` from a shell that reports the expected limits.
 
 If capture prints:
 
@@ -256,29 +256,12 @@ Then start a fresh login session and check again:
 ulimit -r
 ```
 
-Existing terminals, long-running desktop sessions, and already-started services keep the old inherited limit. If `ulimit -r` still reports `0` after adding the limits file, common causes are:
+Existing terminals and long-running desktop sessions keep the old inherited limit. If `ulimit -r` still reports `0` after adding the limits file, common causes are:
 
 - the command is running from an old terminal that was open before the limit changed
 - the user is not a member of the configured group
 - the limits file uses `@group` syntax for a user name, or a bare name for a group
-- the launcher is not PAM-backed or does not inherit the shell's limits
-- a systemd service or user service has its own stricter limit
-
-For a systemd service, set the realtime priority limit in the service unit:
-
-```ini
-[Service]
-LimitRTPRIO=80
-```
-
-For a systemd user service, also check the user manager's inherited limits. A service-level `LimitRTPRIO=80` is the clearest way to make the capture environment reproducible.
-
-After changing service limits, reload and restart the service:
-
-```sh
-systemctl daemon-reload
-systemctl restart your-capture-service
-```
+- the terminal or launcher is not PAM-backed or does not inherit the configured limits
 
 If the warning remains but the JSON sidecar reports `transferResultString` as `success`, the run completed despite normal scheduling priority. Record the warning with the capture results, especially when comparing long-run stability or investigating dropped/corrupt data.
 

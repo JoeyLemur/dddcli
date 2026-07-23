@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "UsbDeviceLibUsb.h"
 #include <memory>
 #include <functional>
@@ -615,18 +618,14 @@ void UsbDeviceLibUsb::UsbTransferThread()
             if (libUsbSubmitTransferReturn != 0)
             {
                 Log().Error("libusb_submit_transfer failed with error code {0}:{1}", libUsbSubmitTransferReturn, libusb_error_name(libUsbSubmitTransferReturn));
-#ifndef _WIN32
                 if (libUsbSubmitTransferReturn == LIBUSB_ERROR_NO_MEM)
                 {
                     SetUsbTransferFinished(UsbDeviceBase::TransferResult::UsbMemoryLimit);
                 }
                 else
                 {
-#endif
                     SetUsbTransferFinished(TransferResult::UsbTransferFailure);
-#ifndef _WIN32
                 }
-#endif
                 transferFailure = true;
                 break;
             }
@@ -820,8 +819,7 @@ void UsbDeviceLibUsb::BulkTransferCallback(libusb_transfer* transfer, TransferBu
         // Calculate the resubmission disk buffer index. In the case of a small usb transfer buffer, there may be many
         // more disk buffers than there are active transfer buffers, and this is how we "roll through" the disk buffers
         // with the transfers as they get resubmitted. In the case of large buffers, there's at least one more disk
-        // buffer than there are active transfer buffers, to allow for overlapped processing and disk IO on two buffers
-        // at once.
+        // buffer than there are active transfer buffers, so processing can work on one buffer while USB fills another.
         size_t resubmissionDiskBufferIndex = (transferUserData->diskBufferIndex + transferUserData->diskBufferIncrementOnCompletion) % transferUserData->diskBufferCount;
         transferUserData->diskBufferIndex = resubmissionDiskBufferIndex;
         DiskBufferEntry& resubmissionBufferEntry = GetDiskBuffer(resubmissionDiskBufferIndex);

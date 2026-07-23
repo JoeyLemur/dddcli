@@ -41,7 +41,7 @@ ctest --test-dir build --output-on-failure
 
 If configuration fails, first verify libusb development files and `pkg-config` metadata for `libusb-1.0`. Tests currently exercise CLI/config code and should not require connected USB or serial hardware.
 
-For real device validation, follow `docs/HARDWARE_TESTS.md`.
+For real device validation, follow `tests/manual/HARDWARE_TESTS.md`.
 
 ## Hardware-Sensitive Areas
 

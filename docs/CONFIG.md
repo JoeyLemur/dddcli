@@ -14,13 +14,27 @@ The default config path is selected from the environment:
 2. Otherwise, if `$HOME` is set, `$HOME/.config/domesday-duplicator/dddcli.toml`
 3. Otherwise, `dddcli.toml` in the current working directory
 
-Use `--config <file>` to choose a different file.
+Use `--config <file>` after the command to choose a different file for one run, such as `dddcli capture --config ./dddcli.example.toml`.
 
 Only the selected default path is checked; these locations are not searched as a fallback chain. Missing config files are allowed. Syntax errors fail startup.
 
 ## Example
 
-An example config is available at [`dddcli.example.toml`](../dddcli.example.toml).
+An example config is available at [`dddcli.example.toml`](../dddcli.example.toml). It is safe to copy as a starting point because its active values match the built-in defaults or safe no-op settings; hardware paths, fixed capture durations, and partial auto-capture ranges are left commented until you opt into them.
+
+To install it at the normal per-user location:
+
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/domesday-duplicator"
+cp dddcli.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/domesday-duplicator/dddcli.toml"
+```
+
+To try it without installing it:
+
+```sh
+dddcli capture --config ./dddcli.example.toml --duration 10
+dddcli player status --config ./dddcli.example.toml --serial-device /dev/ttyUSB0
+```
 
 ```toml
 [usb]
@@ -32,24 +46,29 @@ use_small_usb_transfer_queue = false
 disk_buffer_queue_size = "256MiB"
 
 [capture]
-output_dir = "/capture"
+output_dir = "."
 format = "lds"
-json = "/capture/latest.json"
+json = ""
 test_mode = false
-# Remove this line for captures that should run until interrupted.
-duration_seconds = 10
+# Uncomment to stop manual captures automatically instead of running until
+# interrupted.
+# duration_seconds = 10
 
 [player]
-serial_device = "/dev/ttyUSB0"
+# Uncomment and adjust before using player or auto-capture commands.
+# serial_device = "/dev/ttyUSB0"
 serial_speed = "auto"
 profile = "auto"
 
 [auto_capture]
-# Optional. Omit this to let auto-capture detect the loaded disc type.
-disc_type = "clv"
-mode = "partial"
-start_address = "60"
-end_address = "90"
+mode = "whole-disc"
+# Omit disc_type to let auto-capture detect the loaded disc type. Uncomment to
+# require the loaded disc to match.
+# disc_type = "clv"
+# For mode = "partial", set both addresses. CLV addresses may be seconds,
+# HMMSS, or HMMSSFF. CAV addresses are frames.
+# start_address = "60"
+# end_address = "90"
 key_lock = false
 on_screen_display = true
 ```
@@ -61,6 +80,8 @@ Global options:
 - `--config <file>`: config file path.
 - `--debug`: enable debug logging from the USB backend.
 - `--quiet`: suppress non-error status/progress output.
+
+These options are global in effect, but they are still passed after the command name, and after the player action for `dddcli player`.
 
 USB options:
 

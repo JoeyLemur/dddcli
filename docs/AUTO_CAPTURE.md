@@ -89,6 +89,10 @@ For CLV captures:
 
 CLV metadata values are normalized seconds from the displayed player timecode, not raw compact `HMM`, `HMMSS`, or `HMMSSFF` strings. The precision reflects the values reported by the player, so minute-only CLV discs may record `minTimeCode` and `maxTimeCode` on minute boundaries.
 
+### Future capture quality metrics
+
+A future metadata addition could expose lightweight RF quality indicators for capture smoke tests, such as richer sample distribution statistics, dropout/flatline hints, or per-second stability summaries. Any live-capture metrics must be observe-only, cheap to update while buffers are already being handled, and must never block USB transfer handling or disk writes. Heavier analysis, including decode-like checks, FFTs, histograms, or calibration diagnostics, should live in an offline command that reads an existing capture file instead of running in the active capture path.
+
 ## Cleanup
 
 The auto-capture path is designed to clean up on success, capture errors, and interruption:

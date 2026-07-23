@@ -40,7 +40,7 @@ On Linux, confirm the matching `/dev/bus/usb/...` node is writable by the captur
 ls -l /dev/bus/usb/004/002
 ```
 
-Expected: the node is writable by the capture user, for example `crw-rw-rw-` when using a late `/etc/udev/rules.d/99-domesday.rules` rule. If it is still `0664 root:root`, see `TROUBLESHOOTING.md`.
+Expected: the node is writable by the capture user, for example `crw-rw-rw-` when using a late `/etc/udev/rules.d/99-domesday.rules` rule. If it is still `0664 root:root`, see `../../docs/TROUBLESHOOTING.md`.
 
 ### Linux Capture Host Tuning
 
@@ -97,7 +97,7 @@ captureuser hard rtprio 80
 @domesday hard rtprio 80
 ```
 
-Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their old limits, so start a fresh login session before re-checking. For a systemd service, set `LimitMEMLOCK=512M` and `LimitRTPRIO=80` in the service unit.
+Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their old limits, so start a fresh login session before re-checking. Run `dddcli` from a shell that reports the expected limits.
 
 If capture prints `warning: SetCurrentThreadRealtimePriority: Unable to set thread priority`, the process did not receive realtime scheduling permission. Capture can continue, but configuring `rtprio` removes that warning and gives the capture threads better scheduler priority.
 

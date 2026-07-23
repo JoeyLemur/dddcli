@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 Ed Powell
+// SPDX-License-Identifier: GPL-3.0-only
+
 //----------------------------------------------------------------------------------------------------------------------
 inline std::string WStringToUtf8String(const std::wstring& wideString)
 {
