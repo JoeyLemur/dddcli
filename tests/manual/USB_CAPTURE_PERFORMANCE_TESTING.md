@@ -33,7 +33,7 @@ Optional comparison: repeat the same capture tests with the default `build/` dir
 
 ## 2. Host Preflight
 
-Confirm the DdD device is visible and negotiated as USB 3 SuperSpeed.
+Confirm the DdD device is visible. `list-devices` accepts matching devices connected at USB 2 High Speed or faster; this performance test requires USB 3 SuperSpeed.
 
 ```sh
 ./build-perf/dddcli list-devices

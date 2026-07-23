@@ -24,7 +24,7 @@ ctest --test-dir build --output-on-failure
 ./build/dddcli list-devices
 ```
 
-If a device path is reported, confirm it negotiated as USB 3 SuperSpeed. Replace `4-1` with the device path suffix reported by `list-devices`.
+`list-devices` accepts matching devices connected at USB 2 High Speed or faster. For a capture-performance validation, confirm the reported device negotiated as USB 3 SuperSpeed. Replace `4-1` with the device path suffix reported by `list-devices`.
 
 ```sh
 cat /sys/bus/usb/devices/4-1/speed
@@ -32,7 +32,7 @@ cat /sys/bus/usb/devices/4-1/version
 udevadm info --query=property --path=/sys/bus/usb/devices/4-1
 ```
 
-Expected: USB 3 SuperSpeed reports speed `5000` and version `3.00` or newer.
+For USB 3 performance validation, expected: speed `5000` and version `3.00` or newer.
 
 On Linux, confirm the matching `/dev/bus/usb/...` node is writable by the capture user. Use `BUSNUM` and `DEVNUM` from `udevadm info`; for example, `BUSNUM=004` and `DEVNUM=002` correspond to `/dev/bus/usb/004/002`.
 

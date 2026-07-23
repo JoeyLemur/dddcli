@@ -14,7 +14,7 @@ The default config path is selected from the environment:
 2. Otherwise, if `$HOME` is set, `$HOME/.config/domesday-duplicator/dddcli.toml`
 3. Otherwise, `dddcli.toml` in the current working directory
 
-Use `--config <file>` after the command to choose a different file for one run, such as `dddcli capture --config ./dddcli.example.toml`.
+Use `--config <file>` before, between, or after command words to choose a different file for one run, such as `dddcli capture --config ./dddcli.example.toml`.
 
 Only the selected default path is checked; these locations are not searched as a fallback chain. Missing config files are allowed. Syntax errors fail startup.
 
@@ -81,7 +81,7 @@ Global options:
 - `--debug`: enable debug logging from the USB backend.
 - `--quiet`: suppress non-error status/progress output.
 
-These options are global in effect, but they are still passed after the command name, and after the player action for `dddcli player`.
+Options may appear before, between, or after command words, including after the player action for `dddcli player`.
 
 USB options:
 

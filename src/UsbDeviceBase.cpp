@@ -96,6 +96,7 @@ bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureF
     {
         Log().Error("StartCapture(): Failed to create the output file at path {0}", filePath);
         captureResult = TransferResult::FileCreationError;
+        DisconnectFromDevice();
         return false;
     }
 
@@ -239,7 +240,7 @@ void UsbDeviceBase::CaptureThread()
     // Start a worker thread to transfer data from the USB device
     std::thread usbTransferThread(std::bind(std::mem_fn(&UsbDeviceBase::UsbTransferThread), this));
 
-    // Run transfer continously until we're signalled to stop for some reason
+    // Run transfer continuously until we're signalled to stop for some reason
     captureThreadStopRequested.wait(false);
 
     // Wind up the capture process, latching the appropriate result if an error has occurred.
@@ -805,7 +806,7 @@ bool UsbDeviceBase::VerifyTestSequence(size_t diskBufferIndex)
 
         // If the actual value doesn't match our expected value, but this is the first time the test sequence
         // has wrapped around to 0, check if this appears to be the wrap point for the sequence, and latch it.
-        // Valid wrapp points are either 1021 (newer FPGA firmware) or 1024 (older FPGA firmware).
+        // Valid wrap points are either 1021 (newer FPGA firmware) or 1024 (older FPGA firmware).
         if (!testDataMax.has_value() && (expectedValue != actualValue) && (actualValue == 0) && ((expectedValue == 1021) || (expectedValue == 1024)))
         {
             testDataMax = expectedValue;
@@ -856,7 +857,7 @@ bool UsbDeviceBase::ConvertRawSampleData(size_t diskBufferIndex, CaptureFormat c
             //uint16_t signedValue = ((uint16_t)((int16_t)originalValue - 0x0200) << 6) | ((originalValue >> 4) & 0x003F);
             // In our case here however, that would not be preferred, since we can't restore the lost 6 bits of
             // precision, and where we guess wrong we'd create very slight frequency distortions. It's better to leave
-            // the data as 10-bit and just shift it up, which doesn't technically preserve the relative mplitude of the
+            // the data as 10-bit and just shift it up, which doesn't technically preserve the relative amplitude of the
             // signal, but we don't care about the overall amplitude in this case, it's the frequency we care about.
             uint16_t signedValue = (uint16_t)((int16_t)originalValue - 0x0200) << 6;
             writeBufferPointer[0] = (uint8_t)((uint16_t)signedValue & 0x00FF);

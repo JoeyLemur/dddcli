@@ -41,11 +41,11 @@ bool UsbDeviceLibUsb::Initialize(uint16_t vendorId, uint16_t productId)
 
     // Initialise libUSB
 #if LIBUSB_API_VERSION >= 0x0100010A
-    int libUsbIinitContextReturn = libusb_init_context(&libUsbContext, NULL, 0);
+    int libUsbInitContextReturn = libusb_init_context(&libUsbContext, NULL, 0);
 #else
-    int libUsbIinitContextReturn = libusb_init(&libUsbContext);
+    int libUsbInitContextReturn = libusb_init(&libUsbContext);
 #endif
-    if (libUsbIinitContextReturn != 0)
+    if (libUsbInitContextReturn != 0)
     {
         Log().Error("Initialize(): Could not initialise libUSB library");
         libUsbContext = nullptr;
@@ -182,7 +182,7 @@ bool UsbDeviceLibUsb::ConnectToDevice(const std::string& preferredDevicePath)
             }
         });
 
-    // Get the configuraton descriptor from the USB device
+    // Get the configuration descriptor from the USB device
     libusb_config_descriptor* configDescriptor = nullptr;
     int libUsbGetActiveConfigDescriptorReturn = libusb_get_active_config_descriptor(captureUsbDevice, &configDescriptor);
     if (libUsbGetActiveConfigDescriptorReturn != 0)
@@ -417,7 +417,7 @@ bool UsbDeviceLibUsb::GetAllDomesdayDevices(libusb_device** usbDevicesRaw, std::
         }
 
         // Since the target device matches, store it.
-        Log().Trace("Found matching device with instance path: {0}");
+        Log().Trace("Found matching USB device");
         matchingDevices.push_back(usbDevice);
     }
 
@@ -755,7 +755,7 @@ void UsbDeviceLibUsb::BulkTransferCallback(libusb_transfer* transfer, TransferBu
         return;
     }
 
-    // Ensure we receieved as many bytes as we expected, since we don't handle the case where this isn't true. This
+    // Ensure we received as many bytes as we expected, since we don't handle the case where this isn't true. This
     // check should never fail however, as we specified the LIBUSB_TRANSFER_SHORT_NOT_OK flag when defining the
     // transfers.
     if (transfer->actual_length != transfer->length)
