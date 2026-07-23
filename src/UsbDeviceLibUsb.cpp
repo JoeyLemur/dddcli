@@ -199,7 +199,7 @@ bool UsbDeviceLibUsb::ConnectToDevice(const std::string& preferredDevicePath)
     for (size_t interfaceNo = 0; interfaceNo < configDescriptor->bNumInterfaces; ++interfaceNo)
     {
         const libusb_interface& interface = configDescriptor->interface[interfaceNo];
-        if (alternateInterfaceNumber <= interface.num_altsetting)
+        if (alternateInterfaceNumber < interface.num_altsetting)
         {
             const libusb_interface_descriptor& interfaceDescriptor = interface.altsetting[alternateInterfaceNumber];
             for (size_t endpointNo = 0; endpointNo < interfaceDescriptor.bNumEndpoints; ++endpointNo)
