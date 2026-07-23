@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 cmake_minimum_required(VERSION 3.16)
-project(dddcli VERSION 1.0 LANGUAGES CXX)
+project(dddcli VERSION 1.0.1 LANGUAGES CXX)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR "dddcli is supported only on Linux.")
