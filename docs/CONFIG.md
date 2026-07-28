@@ -93,14 +93,14 @@ USB options:
 
 Capture options:
 
-- `--output <file>`: capture output path.
+- `--output <file>`: capture output path; relative paths are placed under `--output-dir`.
 - `--json <file>`: JSON metadata sidecar path.
 - `--output-dir <dir>`: directory for generated output names.
 - `--format lds|raw|cds`: capture format.
 - `--test-mode`: capture the DdD test pattern.
 - `--duration <seconds>`: stop manual capture after this duration.
 
-If `--output` is omitted, the generated filename is placed under `--output-dir`. If `--output` is present without an extension, the selected capture format extension is appended.
+If `--output` is relative, it is placed under `--output-dir`; an absolute `--output` path is used as given. If `--output` is omitted, the generated filename is placed under `--output-dir`. If `--output` is present without an extension, the selected capture format extension is appended.
 
 Player options:
 

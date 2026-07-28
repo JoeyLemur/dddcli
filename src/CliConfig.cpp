@@ -695,7 +695,7 @@ std::filesystem::path buildOutputPath(const CliOptions& options)
         {
             output += captureFormatExtension(options.captureFormat);
         }
-        return output;
+        return output.is_absolute() ? output : options.outputDir / output;
     }
 
     auto now = std::chrono::system_clock::now();
@@ -759,7 +759,7 @@ void printUsage()
         "  --quiet                          suppress non-error status\n"
         "\n"
         "Capture options:\n"
-        "  --output <file>                  output capture path\n"
+        "  --output <file>                  output path (relative to --output-dir)\n"
         "  --json <file>                    write JSON sidecar metadata\n"
         "  --output-dir <dir>               directory for generated output\n"
         "  --format lds|raw|cds             capture format\n"

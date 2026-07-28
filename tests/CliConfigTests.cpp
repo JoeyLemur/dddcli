@@ -171,6 +171,16 @@ int main()
     assert(flagBeforeCaptureParsed.command == "capture");
     assert(flagBeforeCaptureParsed.options.output == "out.lds");
 
+    CliOptions outputOptions;
+    outputOptions.outputDir = "/tmp/captures";
+    outputOptions.output = "michael_collins_s1.lds";
+    assert(buildOutputPath(outputOptions) == "/tmp/captures/michael_collins_s1.lds");
+    outputOptions.output = "michael_collins_s1";
+    outputOptions.captureFormat = CaptureFormatCli::Raw;
+    assert(buildOutputPath(outputOptions) == "/tmp/captures/michael_collins_s1.raw");
+    outputOptions.output = "/tmp/explicit-output.lds";
+    assert(buildOutputPath(outputOptions) == "/tmp/explicit-output.lds");
+
     const char* flagBeforeAutoCaptureArgv[] = {
         "dddcli",
         "--disc-type",
