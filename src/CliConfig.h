@@ -134,6 +134,9 @@ ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& bas
 std::filesystem::path buildOutputPath(const CliOptions& options);
 UsbDeviceBase::CaptureFormat toUsbCaptureFormat(CaptureFormatCli format);
 std::string captureFormatExtension(CaptureFormatCli format);
+bool hasReachedCaptureDuration(
+    const CliOptions& options,
+    std::chrono::steady_clock::duration elapsed);
 int parseClvAddressSeconds(const std::string& value);
 void applyDetectedDiscType(CliOptions& options, DiscTypeCli discType);
 AutoCaptureEndAddress resolveAutoCaptureEndAddress(

@@ -515,6 +515,14 @@ std::string captureFormatExtension(CaptureFormatCli format)
     return ".lds";
 }
 
+bool hasReachedCaptureDuration(
+    const CliOptions& options,
+    std::chrono::steady_clock::duration elapsed)
+{
+    return options.durationSeconds.has_value() &&
+        elapsed >= std::chrono::seconds(options.durationSeconds.value());
+}
+
 int parseClvAddressSeconds(const std::string& value)
 {
     auto text = trim(value);
@@ -764,7 +772,7 @@ void printUsage()
         "  --output-dir <dir>               directory for generated output\n"
         "  --format lds|raw|cds             capture format\n"
         "  --test-mode                      capture test pattern\n"
-        "  --duration <seconds>             stop manual capture after duration\n"
+        "  --duration <seconds>             stop capture or auto-capture after duration\n"
         "  --usb-device <path>              preferred USB device path\n"
         "  --vid <id> --pid <id>            USB IDs, decimal or 0x-prefixed\n"
         "  --disk-buffer-queue-size <size>  disk queue; bytes/mb/mib, minimum 6MiB\n"

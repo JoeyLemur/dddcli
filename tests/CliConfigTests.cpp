@@ -160,6 +160,15 @@ int main()
     assert(parsed.options.jsonOutput == "/tmp/capture.json");
     assert(parsed.options.durationSeconds.has_value());
     assert(parsed.options.durationSeconds.value() == 1);
+    assert(!hasReachedCaptureDuration(parsed.options, std::chrono::milliseconds(999)));
+    assert(hasReachedCaptureDuration(parsed.options, std::chrono::seconds(1)));
+
+    const char* autoCaptureDurationArgv[] = { "dddcli", "auto-capture", "--duration", "300" };
+    auto autoCaptureDurationParsed = parseCommandLine(4, const_cast<char**>(autoCaptureDurationArgv));
+    assert(autoCaptureDurationParsed.options.durationSeconds.has_value());
+    assert(autoCaptureDurationParsed.options.durationSeconds.value() == 300);
+    assert(!hasReachedCaptureDuration(autoCaptureDurationParsed.options, std::chrono::seconds(299)));
+    assert(hasReachedCaptureDuration(autoCaptureDurationParsed.options, std::chrono::seconds(300)));
 
     const char* flagBeforeCaptureArgv[] = {
         "dddcli",

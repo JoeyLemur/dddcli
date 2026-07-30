@@ -228,8 +228,7 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     while (!stopRequested && usb.GetTransferInProgress())
     {
         progress.update(makeCaptureProgressSnapshot(usb, start));
-        if (options.durationSeconds.has_value() &&
-            std::chrono::steady_clock::now() - start >= std::chrono::seconds(options.durationSeconds.value()))
+        if (hasReachedCaptureDuration(options, std::chrono::steady_clock::now() - start))
         {
             break;
         }
@@ -670,6 +669,15 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     while (!autoCaptureError && !stopRequested && usb.GetTransferInProgress())
     {
         auto now = std::chrono::steady_clock::now();
+        if (hasReachedCaptureDuration(activeOptions, now - start))
+        {
+            if (!activeOptions.quiet)
+            {
+                progress.clear();
+                std::cerr << "Capture duration reached; stopping auto-capture\n";
+            }
+            break;
+        }
         auto playerState = player.getPlayerState();
         if (stopRequested || !usb.GetTransferInProgress())
         {
