@@ -22,6 +22,23 @@ void recordAutoCaptureAddress(CaptureMetadata& metadata, DiscTypeCli discType, i
     }
 }
 
+std::string describeLastValidAutoCaptureAddress(DiscTypeCli discType, int address)
+{
+    if (address < 0)
+    {
+        return {};
+    }
+    if (discType == DiscTypeCli::Cav)
+    {
+        return "Last valid CAV frame number: " + std::to_string(address);
+    }
+    if (discType == DiscTypeCli::Clv)
+    {
+        return "Last valid CLV time code: " + formatClvTimeCode(address);
+    }
+    return {};
+}
+
 bool shouldFailCavStillFrameResume(DiscTypeCli discType, PlayerStateCli playerState, bool resumeSucceeded)
 {
     return discType == DiscTypeCli::Cav && playerState == PlayerStateCli::StillFrame && !resumeSucceeded;

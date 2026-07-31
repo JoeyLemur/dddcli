@@ -780,6 +780,8 @@ int main()
     assert(parsePlayerTimeCodeResponse("abc\r").address == -1);
     assert(parsePlayerTimeCodeResponse("0126A\r").address == -1);
     assert(parsePlayerTimeCodeResponse("<bad\r").address == -1);
+    assert(formatClvTimeCode(2733) == "0:45:33");
+    assert(formatClvTimeCode(754) == "0:12:34");
     auto emptyLeadOutTimeCode = parsePlayerTimeCodeResponse(">\r");
     assert(emptyLeadOutTimeCode.address == -1);
     assert(emptyLeadOutTimeCode.inLeadOut);
@@ -839,6 +841,11 @@ int main()
     assert(clvMetadata.maxTimeCode == 90);
     assert(!clvMetadata.minFrameNumber.has_value());
     assert(!clvMetadata.maxFrameNumber.has_value());
+
+    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Cav, 12345) == "Last valid CAV frame number: 12345");
+    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Clv, 2733) == "Last valid CLV time code: 0:45:33");
+    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Unknown, 12345).empty());
+    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Clv, -1).empty());
 
     assert(shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::StillFrame, false));
     assert(!shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::StillFrame, true));

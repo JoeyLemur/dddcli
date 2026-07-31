@@ -138,6 +138,7 @@ bool hasReachedCaptureDuration(
     const CliOptions& options,
     std::chrono::steady_clock::duration elapsed);
 int parseClvAddressSeconds(const std::string& value);
+std::string formatClvTimeCode(int seconds);
 void applyDetectedDiscType(CliOptions& options, DiscTypeCli discType);
 AutoCaptureEndAddress resolveAutoCaptureEndAddress(
     AutoCaptureModeCli mode,

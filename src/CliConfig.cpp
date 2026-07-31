@@ -554,6 +554,19 @@ int parseClvAddressSeconds(const std::string& value)
     throw std::runtime_error("invalid CLV address length: " + value);
 }
 
+std::string formatClvTimeCode(int seconds)
+{
+    int hours = seconds / 3600;
+    int minutes = (seconds / 60) % 60;
+    int remainingSeconds = seconds % 60;
+
+    std::ostringstream stream;
+    stream << hours << ':'
+           << std::setw(2) << std::setfill('0') << minutes << ':'
+           << std::setw(2) << std::setfill('0') << remainingSeconds;
+    return stream.str();
+}
+
 void applyDetectedDiscType(CliOptions& options, DiscTypeCli discType)
 {
     options.discType = discType;
