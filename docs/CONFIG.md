@@ -47,7 +47,6 @@ disk_buffer_queue_size = "256MiB"
 
 [capture]
 output_dir = "."
-format = "lds"
 json = ""
 test_mode = false
 # Uncomment to stop manual captures automatically instead of running until
@@ -96,11 +95,10 @@ Capture options:
 - `--output <file>`: capture output path; relative paths are placed under `--output-dir`.
 - `--json <file>`: JSON metadata sidecar path.
 - `--output-dir <dir>`: directory for generated output names.
-- `--format lds|raw|cds`: capture format.
 - `--test-mode`: capture the DdD test pattern.
 - `--duration <seconds>`: stop manual capture after this duration.
 
-If `--output` is relative, it is placed under `--output-dir`; an absolute `--output` path is used as given. If `--output` is omitted, the generated filename is placed under `--output-dir`. If `--output` is present without an extension, the selected capture format extension is appended.
+Captures always use packed 10-bit LDS samples. If `--output` is relative, it is placed under `--output-dir`; an absolute `--output` path is used as given. If `--output` is omitted, the generated `.lds` filename is placed under `--output-dir`. If `--output` is present without an extension, `.lds` is appended; an explicitly supplied extension is preserved.
 
 Player options:
 
@@ -128,7 +126,6 @@ The supported config keys are:
 - `[usb] use_small_usb_transfers`
 - `[capture] output_dir`
 - `[capture] json`
-- `[capture] format`
 - `[capture] test_mode`
 - `[capture] duration_seconds`
 - `[player] serial_device`
@@ -141,7 +138,7 @@ The supported config keys are:
 - `[auto_capture] key_lock`
 - `[auto_capture] on_screen_display`
 
-There is currently no config key for `--output`, `--debug`, `--quiet`, or the `--large-*` CLI convenience toggles. Set the matching boolean keys to `false` for large/default USB transfer behavior.
+There is currently no config key for `--output`, `--debug`, `--quiet`, or the `--large-*` CLI convenience toggles. Set the matching boolean keys to `false` for large/default USB transfer behavior. Existing `capture.format` entries are rejected with a migration error because all captures now use LDS.
 
 ## Defaults And Aliases
 
@@ -150,7 +147,7 @@ Defaults:
 - USB VID/PID: `0x1D50:0x603B`
 - disk buffer queue size: `256MiB`
 - output directory: `.`
-- capture format: `lds`
+- capture format: LDS (packed 10-bit RF samples)
 - serial speed: `auto`
 - player profile: `auto`
 - auto-capture disc type: auto-detected from the player
@@ -160,7 +157,6 @@ Defaults:
 
 The command line and config parser accept the canonical values shown above plus a few compatibility aliases:
 
-- capture formats: `ten-bit-packed` or `10bit` for `lds`, `sixteen-bit-signed` or `16bit` for `raw`, and `ten-bit-cd-packed` or `cd` for `cds`
 - player profiles: `generic`, `generic-level-3`, `ld-v4300d`, `ldv4300d`, `ld-v2200`, and `ldv2200`
 - auto-capture modes: `whole` for `whole-disc` and `leadin` for `lead-in`
 - booleans in config: `true/false`, `1/0`, `yes/no`, and `on/off`

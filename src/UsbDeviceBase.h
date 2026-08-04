@@ -18,12 +18,6 @@ class UsbDeviceBase
 {
 public:
     // Enumerations
-    enum class CaptureFormat
-    {
-        Signed16Bit,
-        Unsigned10Bit,
-        Unsigned10Bit4to1Decimation,
-    };
     enum class TransferResult
     {
         Running,
@@ -52,7 +46,7 @@ public:
     void SendConfigurationCommand(const std::string& preferredDevicePath, bool testMode);
 
     // Capture methods
-    bool StartCapture(const std::filesystem::path& filePath, CaptureFormat format, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes);
+    bool StartCapture(const std::filesystem::path& filePath, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes);
     void StopCapture();
     bool GetTransferInProgress() const;
     TransferResult GetTransferResult() const;
@@ -143,14 +137,13 @@ private:
     void ProcessingThread();
     bool ProcessSequenceMarkersAndUpdateSampleMetrics(size_t diskBufferIndex, size_t& processedSampleCount, uint16_t& minValue, uint16_t& maxValue, size_t& minClippedCount, size_t& maxClippedCount);
     bool VerifyTestSequence(size_t diskBufferIndex);
-    bool ConvertRawSampleData(size_t diskBufferIndex, CaptureFormat captureFormat, std::vector<uint8_t>& outputBuffer) const;
+    void ConvertToLdsSampleData(size_t diskBufferIndex, std::vector<uint8_t>& outputBuffer) const;
 private:
     // Logging state
     const ILogger& log;
 
     // Capture settings
     std::filesystem::path captureFilePath;
-    CaptureFormat captureFormat;
     bool captureIsTestMode = false;
     size_t currentUsbTransferQueueSizeInBytes = 0;
     bool currentUseSmallUsbTransfers = false;

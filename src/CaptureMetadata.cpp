@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "CaptureMetadata.h"
+#include "CliConfig.h"
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -50,17 +51,6 @@ std::string isoUtc(std::chrono::system_clock::time_point timePoint)
     std::ostringstream out;
     out << std::put_time(&utc, "%Y-%m-%dT%H:%M:%SZ");
     return out.str();
-}
-
-std::string captureFormatName(CaptureFormatCli format)
-{
-    switch (format)
-    {
-    case CaptureFormatCli::Lds: return "lds";
-    case CaptureFormatCli::Raw: return "raw";
-    case CaptureFormatCli::Cds: return "cds";
-    }
-    return "lds";
 }
 
 template<typename T>
@@ -124,7 +114,7 @@ bool writeCaptureMetadata(
 
     out << "  " << quoted("captureInfo") << ": {\n";
     out << "    " << quoted("captureFilePath") << ": " << quoted(metadata.captureFilePath.string()) << ",\n";
-    out << "    " << quoted("captureFormat") << ": " << quoted(captureFormatName(metadata.captureFormat)) << ",\n";
+    out << "    " << quoted("captureFormat") << ": " << quoted("lds") << ",\n";
     out << "    " << quoted("testMode") << ": " << (metadata.testMode ? "true" : "false") << ",\n";
     out << "    " << quoted("transferResult") << ": " << (int)usb.GetTransferResult() << ",\n";
     out << "    " << quoted("transferResultString") << ": " << quoted(transferResultToString(usb.GetTransferResult())) << ",\n";

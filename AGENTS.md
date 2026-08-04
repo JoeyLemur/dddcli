@@ -7,7 +7,7 @@ Guidance for agents working in this repository.
 `dddcli` is a C++20 command-line port of Domesday Duplicator capture/player workflows. It is intentionally small and mostly lives in:
 
 - `src/main.cpp`: command dispatch, signal handling, USB capture loops, player actions, and auto-capture orchestration.
-- `src/CliConfig.*`: option parsing, default config path, minimal TOML-style config loading, output naming, capture format conversion, and usage text.
+- `src/CliConfig.*`: option parsing, default config path, minimal TOML-style config loading, LDS output naming, and usage text.
 - `src/PlayerSerial.*`: Pioneer-compatible serial player control using POSIX `termios`, `poll`, and raw command/response strings.
 - `src/CaptureMetadata.*`: JSON sidecar metadata generation for captures.
 - `src/ConsoleLogger.*`: adapter from the GUI USB logger interface to stderr.
@@ -48,7 +48,7 @@ For real device validation, follow `tests/manual/HARDWARE_TESTS.md`.
 Capture and auto-capture paths talk to real hardware:
 
 - USB initialization uses the default VID/PID `0x1D50:0x603B` unless overridden.
-- `capture` and `auto-capture` create output directories/files and may write large `.lds`, `.raw`, or `.cds` captures.
+- `capture` and `auto-capture` create output directories/files and may write large `.lds` captures.
 - `auto-capture` can spin up, stop, pause, seek, key-lock, and otherwise control a LaserDisc player through the serial port.
 - `SIGINT`/`SIGTERM` set `stopRequested`; capture cleanup should continue to stop USB transfer and release key-lock where applicable.
 
@@ -65,8 +65,8 @@ When changing these flows, preserve the cleanup behavior in `runAutoCapture()` a
 
 ## Useful Implementation Notes
 
-- Output filenames default to `RF-Sample_YYYY-MM-DD_HH-MM-SS` or `TestData_...` with an extension based on capture format.
-- `--output` without an extension gains the selected capture format extension.
+- Output filenames default to `RF-Sample_YYYY-MM-DD_HH-MM-SS.lds` or `TestData_YYYY-MM-DD_HH-MM-SS.lds`.
+- `--output` without an extension gains `.lds`.
 - `--quiet` suppresses non-error logging and progress, but completion/error reporting is still important.
 - Serial speed `auto` probes `9600`, `4800`, `2400`, then `1200`.
 - Player command profile `auto` maps known model codes to profiles; use `--player-profile` to force `generic-level3`, `pioneer-ld-v4300d`, or `pioneer-ld-v2200`.

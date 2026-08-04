@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CaptureMetadata.h"
+#include "CliConfig.h"
 
 enum class AutoCaptureFinalPlayerAction
 {

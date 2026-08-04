@@ -25,7 +25,6 @@ disk_buffer_queue_size = "256MiB"
 
 [capture]
 output_dir = "."
-format = "lds"
 json = ""
 test_mode = false
 # Uncomment to stop manual captures automatically instead of running until

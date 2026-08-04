@@ -169,15 +169,6 @@ size_t parseDiskBufferQueueSize(const std::string& value)
     return parsed;
 }
 
-CaptureFormatCli parseFormat(const std::string& value)
-{
-    auto text = lower(trim(value));
-    if (text == "lds" || text == "ten-bit-packed" || text == "10bit") return CaptureFormatCli::Lds;
-    if (text == "raw" || text == "sixteen-bit-signed" || text == "16bit") return CaptureFormatCli::Raw;
-    if (text == "cds" || text == "ten-bit-cd-packed" || text == "cd") return CaptureFormatCli::Cds;
-    throw std::runtime_error("invalid capture format: " + value);
-}
-
 SerialSpeedCli parseSerialSpeed(const std::string& value)
 {
     auto text = lower(trim(value));
@@ -303,7 +294,6 @@ bool applyCommandLineOption(ParsedCommandLine& parsed, int& index, int argc, cha
     else if (arg == "--output") parsed.options.output = requireValue(index, argc, argv, arg);
     else if (arg == "--json") parsed.options.jsonOutput = requireValue(index, argc, argv, arg);
     else if (arg == "--output-dir") parsed.options.outputDir = requireValue(index, argc, argv, arg);
-    else if (arg == "--format") parsed.options.captureFormat = parseFormat(requireValue(index, argc, argv, arg));
     else if (arg == "--test-mode") parsed.options.testMode = true;
     else if (arg == "--duration") parsed.options.durationSeconds = parsePositiveInt(requireValue(index, argc, argv, arg), "duration");
     else if (arg == "--serial-device") parsed.options.serialDevice = requireValue(index, argc, argv, arg);
@@ -368,7 +358,7 @@ void applyKeyValue(CliOptions& options, const std::string& key, const std::strin
     else if (key == "usb.use_small_usb_transfers") options.useSmallUsbTransfers = parseBool(value);
     else if (key == "capture.output_dir") options.outputDir = stripQuotes(value);
     else if (key == "capture.json") options.jsonOutput = stripQuotes(value);
-    else if (key == "capture.format") options.captureFormat = parseFormat(stripQuotes(value));
+    else if (key == "capture.format") throw std::runtime_error("capture.format is no longer supported; dddcli always outputs LDS captures");
     else if (key == "capture.test_mode") options.testMode = parseBool(value);
     else if (key == "capture.duration_seconds") options.durationSeconds = parsePositiveInt(stripQuotes(value), "duration");
     else if (key == "player.serial_device") options.serialDevice = stripQuotes(value);
@@ -502,17 +492,6 @@ ParsedCommandLine parseCommandLine(int argc, char* argv[])
 ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& baseOptions)
 {
     return parseCommandLineImpl(argc, argv, baseOptions, true);
-}
-
-std::string captureFormatExtension(CaptureFormatCli format)
-{
-    switch (format)
-    {
-    case CaptureFormatCli::Lds: return ".lds";
-    case CaptureFormatCli::Raw: return ".raw";
-    case CaptureFormatCli::Cds: return ".cds";
-    }
-    return ".lds";
 }
 
 bool hasReachedCaptureDuration(
@@ -714,7 +693,7 @@ std::filesystem::path buildOutputPath(const CliOptions& options)
         auto output = options.output;
         if (output.extension().empty())
         {
-            output += captureFormatExtension(options.captureFormat);
+            output += ".lds";
         }
         return output.is_absolute() ? output : options.outputDir / output;
     }
@@ -727,19 +706,8 @@ std::filesystem::path buildOutputPath(const CliOptions& options)
     std::ostringstream name;
     name << (options.testMode ? "TestData" : "RF-Sample") << "_";
     name << std::put_time(&localTime, "%Y-%m-%d_%H-%M-%S");
-    name << captureFormatExtension(options.captureFormat);
+    name << ".lds";
     return options.outputDir / name.str();
-}
-
-UsbDeviceBase::CaptureFormat toUsbCaptureFormat(CaptureFormatCli format)
-{
-    switch (format)
-    {
-    case CaptureFormatCli::Lds: return UsbDeviceBase::CaptureFormat::Unsigned10Bit;
-    case CaptureFormatCli::Raw: return UsbDeviceBase::CaptureFormat::Signed16Bit;
-    case CaptureFormatCli::Cds: return UsbDeviceBase::CaptureFormat::Unsigned10Bit4to1Decimation;
-    }
-    return UsbDeviceBase::CaptureFormat::Unsigned10Bit;
 }
 
 std::string transferResultToString(UsbDeviceBase::TransferResult result)
@@ -783,7 +751,6 @@ void printUsage()
         "  --output <file>                  output path (relative to --output-dir)\n"
         "  --json <file>                    write JSON sidecar metadata\n"
         "  --output-dir <dir>               directory for generated output\n"
-        "  --format lds|raw|cds             capture format\n"
         "  --test-mode                      capture test pattern\n"
         "  --duration <seconds>             stop capture or auto-capture after duration\n"
         "  --usb-device <path>              preferred USB device path\n"

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "AutoCaptureOrchestration.h"
+#include "CaptureMetadata.h"
 #include "CliConfig.h"
+#include "ConsoleLogger.h"
 #include "PlayerSerial.h"
 #include "ProgressLine.h"
 #include <cassert>
@@ -67,6 +69,34 @@ void assertConfigApplyThrows(const std::filesystem::path& path, const std::strin
     std::filesystem::remove(path);
 }
 
+class MetadataTestUsb final : public UsbDeviceBase
+{
+public:
+    explicit MetadataTestUsb(const ILogger& log)
+        : UsbDeviceBase(log)
+    {
+    }
+
+    bool DevicePresent(const std::string&) const override { return false; }
+    bool GetPresentDevicePaths(std::vector<std::string>& devicePaths) const override
+    {
+        devicePaths.clear();
+        return true;
+    }
+
+protected:
+    bool DeviceConnected() const override { return false; }
+    bool ConnectToDevice(const std::string&) override { return false; }
+    void DisconnectFromDevice() override { }
+    bool SendVendorSpecificCommand(const std::string&, uint8_t, uint16_t) override { return false; }
+    void CalculateDesiredBufferCountAndSize(bool, size_t, size_t, size_t& bufferCount, size_t& bufferSizeInBytes) const override
+    {
+        bufferCount = 0;
+        bufferSizeInBytes = 0;
+    }
+    void UsbTransferThread() override { }
+};
+
 void assertClvAddressThrows(const std::string& value)
 {
     bool threw = false;
@@ -84,10 +114,6 @@ void assertClvAddressThrows(const std::string& value)
 
 int main()
 {
-    assert(captureFormatExtension(CaptureFormatCli::Lds) == ".lds");
-    assert(captureFormatExtension(CaptureFormatCli::Raw) == ".raw");
-    assert(captureFormatExtension(CaptureFormatCli::Cds) == ".cds");
-
     CaptureProgressSnapshot progressSnapshot;
     progressSnapshot.elapsedSeconds = 42;
     progressSnapshot.bytesWritten = 5 * 1024 * 1024;
@@ -140,28 +166,27 @@ int main()
     CliOptions base;
     base.configPath = "custom.toml";
     base.outputDir = "/tmp/from-config";
-    base.captureFormat = CaptureFormatCli::Raw;
     const char* argv[] = {
         "dddcli",
         "capture",
         "--output-dir",
         "/tmp/from-cli",
-        "--format",
-        "cds",
         "--json",
         "/tmp/capture.json",
         "--duration",
         "1",
     };
-    auto parsed = parseCommandLine(10, const_cast<char**>(argv), base);
+    auto parsed = parseCommandLine(8, const_cast<char**>(argv), base);
     assert(parsed.command == "capture");
     assert(parsed.options.outputDir == "/tmp/from-cli");
-    assert(parsed.options.captureFormat == CaptureFormatCli::Cds);
     assert(parsed.options.jsonOutput == "/tmp/capture.json");
     assert(parsed.options.durationSeconds.has_value());
     assert(parsed.options.durationSeconds.value() == 1);
     assert(!hasReachedCaptureDuration(parsed.options, std::chrono::milliseconds(999)));
     assert(hasReachedCaptureDuration(parsed.options, std::chrono::seconds(1)));
+
+    const char* removedFormatArgv[] = { "dddcli", "capture", "--format", "lds" };
+    assertParseThrows(removedFormatArgv, 4);
 
     const char* autoCaptureDurationArgv[] = { "dddcli", "auto-capture", "--duration", "300" };
     auto autoCaptureDurationParsed = parseCommandLine(4, const_cast<char**>(autoCaptureDurationArgv));
@@ -185,7 +210,8 @@ int main()
     outputOptions.output = "michael_collins_s1.lds";
     assert(buildOutputPath(outputOptions) == "/tmp/captures/michael_collins_s1.lds");
     outputOptions.output = "michael_collins_s1";
-    outputOptions.captureFormat = CaptureFormatCli::Raw;
+    assert(buildOutputPath(outputOptions) == "/tmp/captures/michael_collins_s1.lds");
+    outputOptions.output = "michael_collins_s1.raw";
     assert(buildOutputPath(outputOptions) == "/tmp/captures/michael_collins_s1.raw");
     outputOptions.output = "/tmp/explicit-output.lds";
     assert(buildOutputPath(outputOptions) == "/tmp/explicit-output.lds");
@@ -578,7 +604,6 @@ int main()
         std::ofstream file(path);
         file << "[capture]\n";
         file << "output_dir = \"/tmp/cfg\"\n";
-        file << "format = \"raw\"\n";
         file << "test_mode = true\n";
         file << "[usb]\n";
         file << "vid = \"0x1D50\"\n";
@@ -600,7 +625,6 @@ int main()
     assert(config.load(path, error));
     config.applyTo(options);
     assert(options.outputDir == "/tmp/cfg");
-    assert(options.captureFormat == CaptureFormatCli::Raw);
     assert(options.testMode);
     assert(options.usbVid == 0x1D50);
     assert(options.diskBufferQueueSize == 128 * 1024 * 1024);
@@ -695,6 +719,39 @@ int main()
 
     auto unknownConfigKeyPath = std::filesystem::temp_directory_path() / "dddcli-unknown-key-test.toml";
     assertConfigApplyThrows(unknownConfigKeyPath, "[capture]\nduration_second = 10\n");
+
+    auto removedFormatConfigPath = std::filesystem::temp_directory_path() / "dddcli-removed-format-test.toml";
+    {
+        std::ofstream file(removedFormatConfigPath);
+        file << "[capture]\n";
+        file << "format = \"lds\"\n";
+    }
+    assert(config.load(removedFormatConfigPath, error));
+    bool removedFormatConfigThrew = false;
+    try
+    {
+        CliOptions removedFormatOptions;
+        config.applyTo(removedFormatOptions);
+    }
+    catch (const std::runtime_error& exception)
+    {
+        removedFormatConfigThrew = true;
+        assert(std::string(exception.what()).find("capture.format is no longer supported") != std::string::npos);
+    }
+    assert(removedFormatConfigThrew);
+
+    auto metadataPath = std::filesystem::temp_directory_path() / "dddcli-capture-metadata-test.json";
+    auto metadataLog = ConsoleLogger::Create(ILogger::SeverityFilter::None, true);
+    MetadataTestUsb metadataUsb(*metadataLog);
+    CaptureMetadata metadata;
+    metadata.captureFilePath = "/tmp/capture.lds";
+    metadata.creationTimeUtc = std::chrono::system_clock::now();
+    assert(writeCaptureMetadata(metadataPath, metadata, metadataUsb, error));
+    std::ifstream metadataFile(metadataPath);
+    std::ostringstream metadataJson;
+    metadataJson << metadataFile.rdbuf();
+    assert(metadataJson.str().find("\"captureFormat\": \"lds\"") != std::string::npos);
+    std::filesystem::remove(metadataPath);
 
     assert(parseClvAddressSeconds("754") == 754);
     assert(parseClvAddressSeconds("01234") == 754);
@@ -860,5 +917,6 @@ int main()
     std::filesystem::remove(quotedHashPath);
     std::filesystem::remove(quotedHashCommentPath);
     std::filesystem::remove(invalidUsbIdPath);
+    std::filesystem::remove(removedFormatConfigPath);
     return 0;
 }

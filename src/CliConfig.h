@@ -11,13 +11,6 @@
 #include <optional>
 #include <string>
 
-enum class CaptureFormatCli
-{
-    Lds,
-    Raw,
-    Cds,
-};
-
 enum class SerialSpeedCli
 {
     Auto,
@@ -76,7 +69,6 @@ struct CliOptions
     std::filesystem::path output;
     std::filesystem::path jsonOutput;
     std::filesystem::path outputDir = ".";
-    CaptureFormatCli captureFormat = CaptureFormatCli::Lds;
     bool testMode = false;
     std::optional<int> durationSeconds;
 
@@ -132,8 +124,6 @@ std::filesystem::path defaultConfigPath();
 ParsedCommandLine parseCommandLine(int argc, char* argv[]);
 ParsedCommandLine parseCommandLine(int argc, char* argv[], const CliOptions& baseOptions);
 std::filesystem::path buildOutputPath(const CliOptions& options);
-UsbDeviceBase::CaptureFormat toUsbCaptureFormat(CaptureFormatCli format);
-std::string captureFormatExtension(CaptureFormatCli format);
 bool hasReachedCaptureDuration(
     const CliOptions& options,
     std::chrono::steady_clock::duration elapsed);

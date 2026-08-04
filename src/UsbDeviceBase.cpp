@@ -59,7 +59,7 @@ void UsbDeviceBase::SendConfigurationCommand(const std::string& preferredDeviceP
 //----------------------------------------------------------------------------------------------------------------------
 // Capture methods
 //----------------------------------------------------------------------------------------------------------------------
-bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureFormat format, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes)
+bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, const std::string& preferredDevicePath, bool isTestMode, bool useSmallUsbTransfers, size_t usbTransferQueueSizeInBytes, size_t diskBufferQueueSizeInBytes)
 {
     // If we're already performing a capture, abort any further processing.
     if (transferInProgress)
@@ -112,7 +112,6 @@ bool UsbDeviceBase::StartCapture(const std::filesystem::path& filePath, CaptureF
 
     // Record the capture settings
     captureFilePath = filePath;
-    captureFormat = format;
     captureIsTestMode = isTestMode;
     currentUsbTransferQueueSizeInBytes = usbTransferQueueSizeInBytes;
     currentUseSmallUsbTransfers = useSmallUsbTransfers;
@@ -181,20 +180,8 @@ void UsbDeviceBase::StopCapture()
 //----------------------------------------------------------------------------------------------------------------------
 void UsbDeviceBase::CaptureThread()
 {
-    // Determine how large our conversion buffers need to be based on the disk buffer size and the capture format
-    size_t requiredConversionBufferSize = 0;
-    switch (captureFormat)
-    {
-    case CaptureFormat::Signed16Bit:
-        requiredConversionBufferSize = diskBufferSizeInBytes;
-        break;
-    case CaptureFormat::Unsigned10Bit:
-        requiredConversionBufferSize = (diskBufferSizeInBytes / 8) * 5;
-        break;
-    case CaptureFormat::Unsigned10Bit4to1Decimation:
-        requiredConversionBufferSize = (diskBufferSizeInBytes / (8 * 4)) * 5;
-        break;
-    }
+    // LDS output packs four 10-bit samples from each eight input bytes into five output bytes.
+    size_t requiredConversionBufferSize = (diskBufferSizeInBytes / 8) * 5;
 
     // Allocate our conversion buffers
     for (size_t i = 0; i < conversionBufferCount; ++i)
@@ -633,14 +620,9 @@ void UsbDeviceBase::ProcessingThread()
                 continue;
             }
 
-            // Convert the sample data into the requested data format
+            // Convert the sample data into LDS's packed 10-bit format.
             auto& currentConversionBuffer = conversionBuffers[0];
-            if (!ConvertRawSampleData(currentDiskBuffer, captureFormat, currentConversionBuffer))
-            {
-                SetProcessingFinished(TransferResult::ProgramError);
-                processingFailure = true;
-                continue;
-            }
+            ConvertToLdsSampleData(currentDiskBuffer, currentConversionBuffer);
 
             // Write the data to the output file
             captureOutputFile.write((const char*)currentConversionBuffer.data(), currentConversionBuffer.size());
@@ -836,85 +818,32 @@ bool UsbDeviceBase::VerifyTestSequence(size_t diskBufferIndex)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-bool UsbDeviceBase::ConvertRawSampleData(size_t diskBufferIndex, CaptureFormat captureFormat, std::vector<uint8_t>& outputBuffer) const
+void UsbDeviceBase::ConvertToLdsSampleData(size_t diskBufferIndex, std::vector<uint8_t>& outputBuffer) const
 {
     const DiskBufferEntry& bufferEntry = diskBufferEntries[diskBufferIndex];
     const uint8_t* readBufferPointer = bufferEntry.readBuffer.data();
     size_t readBufferSizeInBytes = bufferEntry.readBuffer.size();
 
-    // Convert the data to the required format
+    // Convert the data to packed 10-bit LDS samples.
     uint8_t* writeBufferPointer = outputBuffer.data();
-    if (captureFormat == CaptureFormat::Signed16Bit)
-    {
-        // Translate the data in the disk buffer to scaled 16-bit signed data
-        for (size_t i = 0; i < readBufferSizeInBytes; i += 2)
-        {
-            // Get the original 10-bit unsigned value from the disk data buffer
-            uint16_t originalValue = (uint16_t)readBufferPointer[0] | ((uint16_t)readBufferPointer[1] << 8);
-            readBufferPointer += 2;
-
-            // Sign and scale the data to 16-bits. Technically a line like this would use the entire 16-bit range:
-            //uint16_t signedValue = ((uint16_t)((int16_t)originalValue - 0x0200) << 6) | ((originalValue >> 4) & 0x003F);
-            // In our case here however, that would not be preferred, since we can't restore the lost 6 bits of
-            // precision, and where we guess wrong we'd create very slight frequency distortions. It's better to leave
-            // the data as 10-bit and just shift it up, which doesn't technically preserve the relative amplitude of the
-            // signal, but we don't care about the overall amplitude in this case, it's the frequency we care about.
-            uint16_t signedValue = (uint16_t)((int16_t)originalValue - 0x0200) << 6;
-            writeBufferPointer[0] = (uint8_t)((uint16_t)signedValue & 0x00FF);
-            writeBufferPointer[1] = (uint8_t)(((uint16_t)signedValue & 0xFF00) >> 8);
-            writeBufferPointer += 2;
-        }
-    }
-    else if (captureFormat == CaptureFormat::Unsigned10Bit)
+    for (size_t i = 0; i < readBufferSizeInBytes; i += 8)
     {
         // Translate the data in the disk buffer to unsigned 10-bit packed data
-        for (size_t i = 0; i < readBufferSizeInBytes; i += 8)
-        {
-            // Get the original 4 10-bit words
-            uint16_t originalWords[4];
-            originalWords[0] = (uint16_t)readBufferPointer[0] | ((uint16_t)readBufferPointer[1] << 8);
-            originalWords[1] = (uint16_t)readBufferPointer[2] | ((uint16_t)readBufferPointer[3] << 8);
-            originalWords[2] = (uint16_t)readBufferPointer[4] | ((uint16_t)readBufferPointer[5] << 8);
-            originalWords[3] = (uint16_t)readBufferPointer[6] | ((uint16_t)readBufferPointer[7] << 8);
-            readBufferPointer += 8;
+        uint16_t originalWords[4];
+        originalWords[0] = (uint16_t)readBufferPointer[0] | ((uint16_t)readBufferPointer[1] << 8);
+        originalWords[1] = (uint16_t)readBufferPointer[2] | ((uint16_t)readBufferPointer[3] << 8);
+        originalWords[2] = (uint16_t)readBufferPointer[4] | ((uint16_t)readBufferPointer[5] << 8);
+        originalWords[3] = (uint16_t)readBufferPointer[6] | ((uint16_t)readBufferPointer[7] << 8);
+        readBufferPointer += 8;
 
-            // Convert into 5 bytes of packed 10-bit data
-            writeBufferPointer[0] = (uint8_t)((originalWords[0] & 0x03FC) >> 2);
-            writeBufferPointer[1] = (uint8_t)((originalWords[0] & 0x0003) << 6) | (uint8_t)((originalWords[1] & 0x03F0) >> 4);
-            writeBufferPointer[2] = (uint8_t)((originalWords[1] & 0x000F) << 4) | (uint8_t)((originalWords[2] & 0x03C0) >> 6);
-            writeBufferPointer[3] = (uint8_t)((originalWords[2] & 0x003F) << 2) | (uint8_t)((originalWords[3] & 0x0300) >> 8);
-            writeBufferPointer[4] = (uint8_t)((originalWords[3] & 0x00FF));
-            writeBufferPointer += 5;
-        }
+        // Convert into 5 bytes of packed 10-bit data
+        writeBufferPointer[0] = (uint8_t)((originalWords[0] & 0x03FC) >> 2);
+        writeBufferPointer[1] = (uint8_t)((originalWords[0] & 0x0003) << 6) | (uint8_t)((originalWords[1] & 0x03F0) >> 4);
+        writeBufferPointer[2] = (uint8_t)((originalWords[1] & 0x000F) << 4) | (uint8_t)((originalWords[2] & 0x03C0) >> 6);
+        writeBufferPointer[3] = (uint8_t)((originalWords[2] & 0x003F) << 2) | (uint8_t)((originalWords[3] & 0x0300) >> 8);
+        writeBufferPointer[4] = (uint8_t)((originalWords[3] & 0x00FF));
+        writeBufferPointer += 5;
     }
-    else if (captureFormat == CaptureFormat::Unsigned10Bit4to1Decimation)
-    {
-        // Translate the data in the disk buffer to unsigned 10-bit packed data with 4:1 decimation
-        for (size_t i = 0; i < readBufferSizeInBytes; i += (8 * 4))
-        {
-            // Get the original 4 10-bit words
-            uint16_t originalWords[4];
-            originalWords[0] = (uint16_t)readBufferPointer[0 + 0] | ((uint16_t)readBufferPointer[1 + 0] << 8);
-            originalWords[1] = (uint16_t)readBufferPointer[2 + 4] | ((uint16_t)readBufferPointer[3 + 4] << 8);
-            originalWords[2] = (uint16_t)readBufferPointer[4 + 8] | ((uint16_t)readBufferPointer[5 + 8] << 8);
-            originalWords[3] = (uint16_t)readBufferPointer[6 + 12] | ((uint16_t)readBufferPointer[7 + 12] << 8);
-            readBufferPointer += 8 * 4;
-
-            // Convert into 5 bytes of packed 10-bit data
-            writeBufferPointer[0] = (uint8_t)((originalWords[0] & 0x03FC) >> 2);
-            writeBufferPointer[1] = (uint8_t)((originalWords[0] & 0x0003) << 6) | (uint8_t)((originalWords[1] & 0x03F0) >> 4);
-            writeBufferPointer[2] = (uint8_t)((originalWords[1] & 0x000F) << 4) | (uint8_t)((originalWords[2] & 0x03C0) >> 6);
-            writeBufferPointer[3] = (uint8_t)((originalWords[2] & 0x003F) << 2) | (uint8_t)((originalWords[3] & 0x0300) >> 8);
-            writeBufferPointer[4] = (uint8_t)((originalWords[3] & 0x00FF));
-            writeBufferPointer += 5;
-        }
-    }
-    else
-    {
-        Log().Error("ConvertRawSampleData(): Unknown capture format {0} specified", captureFormat);
-        return false;
-    }
-    return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

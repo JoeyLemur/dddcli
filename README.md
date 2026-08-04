@@ -105,13 +105,7 @@ Flags may appear before, between, or after command words, so stable settings can
 
 ## Output
 
-Supported capture formats are:
-
-- `lds`: 10-bit packed RF samples, the default.
-- `raw`: 16-bit signed samples.
-- `cds`: 10-bit packed CD capture format.
-
-If `--output` has no extension, the selected format extension is added. Relative `--output` paths are placed under `--output-dir`; absolute paths are used as given. If no output path is provided, the tool creates a timestamped file under `--output-dir`, which defaults to the current directory. Generated filenames use `RF-Sample_YYYY-MM-DD_HH-MM-SS` or `TestData_YYYY-MM-DD_HH-MM-SS` when `--test-mode` is enabled.
+Captures use the LDS format: 10-bit packed RF samples. If `--output` has no extension, `.lds` is added; an explicitly supplied extension is preserved. Relative `--output` paths are placed under `--output-dir`; absolute paths are used as given. If no output path is provided, the tool creates a timestamped `.lds` file under `--output-dir`, which defaults to the current directory. Generated filenames use `RF-Sample_YYYY-MM-DD_HH-MM-SS` or `TestData_YYYY-MM-DD_HH-MM-SS` when `--test-mode` is enabled.
 
 Use `--json <file>` to write a metadata sidecar. The sidecar contains `captureInfo` for every capture, including the capture path, format, transfer result, duration, transfer and disk-buffer counts, file size, sample count, sample min/max, clipping counts, sequence-marker presence, and UTC creation timestamp. Auto-captures also populate `serialInfo` with player and disc fields; CAV metadata records `minFrameNumber` and `maxFrameNumber`, while CLV metadata records `minTimeCode` and `maxTimeCode` as player-reported timecodes normalized to seconds.
 

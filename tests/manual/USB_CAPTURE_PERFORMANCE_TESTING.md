@@ -138,29 +138,21 @@ Expected:
 
 Repeat once while the desktop is idle and once during a normal desktop workload. Avoid artificial stress tools for acceptance; they are useful only for margin testing.
 
-## 5. Format Matrix
+## 5. LDS Capture Check
 
-Run the same duration for each capture format. This helps separate USB ingest from CPU conversion and output write rate.
+Run a 30-second LDS capture to check the normal packed-sample conversion and output write rate.
 
 ```sh
-./build-perf/dddcli capture --duration 30 --format lds --output /tmp/dddcli-format.lds --json /tmp/dddcli-format-lds.json
-./build-perf/dddcli capture --duration 30 --format raw --output /tmp/dddcli-format.raw --json /tmp/dddcli-format-raw.json
-./build-perf/dddcli capture --duration 30 --format cds --output /tmp/dddcli-format.cds --json /tmp/dddcli-format-cds.json
+./build-perf/dddcli capture --duration 30 --output /tmp/dddcli-format.lds --json /tmp/dddcli-format.json
 ```
 
-Compare:
+Check:
 
 - transfer result
 - file size and write rate
 - sample count
-- CPU usage observed during each run
-- whether one format is more likely to fail or slow down
-
-Interpretation:
-
-- `raw` writes more bytes and stresses storage more.
-- `lds` is the default path and exercises sequence stripping plus 10-bit packing.
-- `cds` exercises decimation and should write much less data.
+- CPU usage while the LDS converter runs
+- no sequence mismatch, USB transfer failure, or file write error
 
 ## 6. Queue And Transfer Settings
 
@@ -255,7 +247,7 @@ Treat the capture path as healthy for normal use only when:
 - optimized build passes software tests
 - USB 3 speed and host tuning match the preflight expectations
 - default LDS capture succeeds for 5 seconds and 120 seconds
-- format matrix succeeds without sequence mismatch or file write errors
+- 30-second LDS capture check succeeds without sequence mismatch or file write errors
 - intended storage sustains the write rate with margin
 - repeated runs produce consistent file size, sample count, and transfer result
 

@@ -73,7 +73,6 @@ bool startCapture(UsbDeviceBase& usb, const CliOptions& options, const std::file
     usb.SendConfigurationCommand(options.usbPreferredDevice, options.testMode);
     return usb.StartCapture(
         outputPath,
-        toUsbCaptureFormat(options.captureFormat),
         options.usbPreferredDevice,
         options.testMode,
         options.useSmallUsbTransfers,
@@ -204,7 +203,6 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
 
     CaptureMetadata metadata;
     metadata.captureFilePath = outputPath;
-    metadata.captureFormat = options.captureFormat;
     metadata.testMode = options.testMode;
     metadata.creationTimeUtc = std::chrono::system_clock::now();
 
@@ -360,7 +358,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     auto outputPath = buildOutputPath(activeOptions);
     CaptureMetadata metadata;
     metadata.captureFilePath = outputPath;
-    metadata.captureFormat = options.captureFormat;
     metadata.testMode = options.testMode;
     metadata.creationTimeUtc = std::chrono::system_clock::now();
     metadata.playerModelCode = player.modelCode();

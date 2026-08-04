@@ -43,11 +43,17 @@ if(BUILD_TESTING)
         tests/CliConfigTests.cpp
         src/CliConfig.cpp
         src/AutoCaptureOrchestration.cpp
+        src/CaptureMetadata.cpp
+        src/ConsoleLogger.cpp
         src/PlayerSerial.cpp
         src/ProgressLine.cpp
+        src/UsbDeviceBase.cpp
     )
     target_include_directories(dddcli_tests PRIVATE
         src
+    )
+    target_link_libraries(dddcli_tests PRIVATE
+        pthread
     )
     add_test(NAME dddcli_tests COMMAND dddcli_tests)
 endif()

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "CliConfig.h"
-#include "PlayerSerial.h"
 #include "UsbDeviceBase.h"
 #include <chrono>
 #include <filesystem>
@@ -14,7 +12,6 @@
 struct CaptureMetadata
 {
     std::filesystem::path captureFilePath;
-    CaptureFormatCli captureFormat = CaptureFormatCli::Lds;
     bool testMode = false;
     std::chrono::system_clock::time_point creationTimeUtc;
     std::chrono::milliseconds duration{0};
@@ -38,4 +35,3 @@ bool writeCaptureMetadata(
     const CaptureMetadata& metadata,
     const UsbDeviceBase& usb,
     std::string& error);
-
