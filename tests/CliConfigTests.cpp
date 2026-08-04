@@ -9,6 +9,7 @@
 #include "ProgressLine.h"
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -114,6 +115,20 @@ void assertClvAddressThrows(const std::string& value)
 
 int main()
 {
+    const char* originalXdgConfigHome = std::getenv("XDG_CONFIG_HOME");
+    const bool hadXdgConfigHome = originalXdgConfigHome != nullptr;
+    const std::string savedXdgConfigHome = hadXdgConfigHome ? originalXdgConfigHome : "";
+    setenv("XDG_CONFIG_HOME", "/tmp/dddcli-test-config", 1);
+    assert(defaultConfigPath() == "/tmp/dddcli-test-config/dddcli/dddcli.toml");
+    if (hadXdgConfigHome)
+    {
+        setenv("XDG_CONFIG_HOME", savedXdgConfigHome.c_str(), 1);
+    }
+    else
+    {
+        unsetenv("XDG_CONFIG_HOME");
+    }
+
     CaptureProgressSnapshot progressSnapshot;
     progressSnapshot.elapsedSeconds = 42;
     progressSnapshot.bytesWritten = 5 * 1024 * 1024;

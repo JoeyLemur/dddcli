@@ -25,7 +25,7 @@ Supported commands are:
 - `dddcli auto-capture`
 - `dddcli player status|play|pause|stop|still|read-user-codes|raw-command <command>`
 
-Config defaults come from `$XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml`, then `$HOME/.config/domesday-duplicator/dddcli.toml`, then `dddcli.toml`. CLI flags override config values because `main()` loads config into a base `CliOptions` and reparses argv over it.
+Config defaults come from `$XDG_CONFIG_HOME/dddcli/dddcli.toml`, then `$HOME/.config/dddcli/dddcli.toml`, then `dddcli.toml`. CLI flags override config values because `main()` loads config into a base `CliOptions` and reparses argv over it.
 
 The config loader is intentionally minimal: sections plus `key = value`, comments with `#`, and simple string/number/bool parsing. Do not assume full TOML behavior unless you add tests for it.
 

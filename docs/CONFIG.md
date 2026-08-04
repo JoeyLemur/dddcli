@@ -10,8 +10,8 @@ Values are applied before command-line parsing, so a supplied command-line flag 
 
 The default config path is selected from the environment:
 
-1. If `$XDG_CONFIG_HOME` is set, `$XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml`
-2. Otherwise, if `$HOME` is set, `$HOME/.config/domesday-duplicator/dddcli.toml`
+1. If `$XDG_CONFIG_HOME` is set, `$XDG_CONFIG_HOME/dddcli/dddcli.toml`
+2. Otherwise, if `$HOME` is set, `$HOME/.config/dddcli/dddcli.toml`
 3. Otherwise, `dddcli.toml` in the current working directory
 
 Use `--config <file>` before, between, or after command words to choose a different file for one run, such as `dddcli capture --config ./dddcli.example.toml`.
@@ -25,8 +25,8 @@ An example config is available at [`dddcli.example.toml`](../dddcli.example.toml
 To install it at the normal per-user location:
 
 ```sh
-mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/domesday-duplicator"
-cp dddcli.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/domesday-duplicator/dddcli.toml"
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/dddcli"
+cp dddcli.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/dddcli/dddcli.toml"
 ```
 
 To try it without installing it:

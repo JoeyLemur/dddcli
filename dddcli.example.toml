@@ -6,8 +6,8 @@
 # only when you want them to apply to every matching command.
 #
 # Copy this file to the selected default config path for your environment:
-#   $XDG_CONFIG_HOME/domesday-duplicator/dddcli.toml   # if XDG_CONFIG_HOME is set
-#   $HOME/.config/domesday-duplicator/dddcli.toml      # otherwise, if HOME is set
+#   $XDG_CONFIG_HOME/dddcli/dddcli.toml   # if XDG_CONFIG_HOME is set
+#   $HOME/.config/dddcli/dddcli.toml      # otherwise, if HOME is set
 #   ./dddcli.toml                                      # otherwise
 #
 # Or test it for one command:

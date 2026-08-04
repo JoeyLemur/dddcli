@@ -418,12 +418,12 @@ std::filesystem::path defaultConfigPath()
     const char* xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
     if (xdgConfigHome != nullptr && *xdgConfigHome != '\0')
     {
-        return std::filesystem::path(xdgConfigHome) / "domesday-duplicator" / "dddcli.toml";
+        return std::filesystem::path(xdgConfigHome) / "dddcli" / "dddcli.toml";
     }
     const char* home = std::getenv("HOME");
     if (home != nullptr && *home != '\0')
     {
-        return std::filesystem::path(home) / ".config" / "domesday-duplicator" / "dddcli.toml";
+        return std::filesystem::path(home) / ".config" / "dddcli" / "dddcli.toml";
     }
     return "dddcli.toml";
 }
