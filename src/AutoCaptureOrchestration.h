@@ -14,9 +14,23 @@ enum class AutoCaptureFinalPlayerAction
     Pause,
 };
 
+enum class ClvEndProbeCompletion
+{
+    None,
+    Wrapped,
+    TerminalState,
+};
+
 void recordAutoCaptureAddress(CaptureMetadata& metadata, DiscTypeCli discType, int address);
 std::chrono::seconds cavEndProbeRolloverTimeout(int nearEndFloor);
 bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor);
+bool hasConfirmedClvEndProbeFloor(PlayerStateCli playerState, int previousTimeCode, int currentTimeCode);
+ClvEndProbeCompletion confirmClvEndProbeCompletion(
+    PlayerStateCli playerState,
+    int previousTimeCode,
+    int currentTimeCode,
+    int nearEndFloor,
+    bool advancedPastNearEndFloor);
 std::string describeLastObservedAutoCaptureAddress(DiscTypeCli discType, int address);
 bool shouldFailCavStillFrameResume(DiscTypeCli discType, PlayerStateCli playerState, bool resumeSucceeded);
 AutoCaptureFinalPlayerAction finalPlayerActionForAutoCapture(DiscTypeCli discType, bool autoCaptureError);

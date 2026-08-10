@@ -251,10 +251,12 @@ If stderr is piped through `tee` for logging, progress is emitted as newline sta
 
 Expected:
 
-- player probes the CLV end, spins down, then captures from lead-in/playback start
+- player probes the CLV end by seeking to `1:59:59`, confirming a stable terminal timecode, and then verifying either a backward end transition or terminal state after forward progress; a stopped-player seek rejection is retried after spin-up
+- probe failure pauses the player and aborts before USB capture starts
+- player spins down, then captures from lead-in/playback start
 - capture reaches the detected end timecode and does not stop before the final reported second
 - capture stops after the player reports the next second, after the CLV 1.5 second post-roll fallback, or cleanly if the player stops/pauses/still-frames during post-roll
-- if the player restarts from the beginning at end-of-disc, capture stops when the near-end timecode wraps back to an earlier timecode
+- if the player makes a backward end transition at end-of-disc, capture stops near the requested end
 - a near-end partial CLV capture with `--end-address` close to the physical end stops cleanly if the player wraps
 - final player cleanup stops the CLV disc
 - JSON `minTimeCode` and `maxTimeCode` reflect addresses seen during capture and do not include the earlier disc-end probe
@@ -336,10 +338,10 @@ Run a whole-disc CAV auto-capture. Use the shortest suitable test disc if captur
 Expected:
 
 - player probes the CAV end, spins down, then captures from lead-in/playback start
-- probe logs a near-end still-frame floor, then verifies a frame rollover while playing with stop codes disabled; a probe that cannot verify rollover aborts before USB capture starts
-- capture continues beyond the probe floor and stops on the verified frame rollover
-- the rollover restart frame is excluded from JSON `maxFrameNumber`
-- `Last observed CAV frame number` may be the wrapped restart frame; the preceding rollover message identifies the last pre-wrap frame
+- probe logs a near-end still-frame floor, then verifies an end transition while playing with stop codes disabled; a probe that cannot verify that transition aborts before USB capture starts
+- capture continues beyond the probe floor and stops on the verified frame end transition
+- the post-transition frame is excluded from JSON `maxFrameNumber`
+- the end-transition message identifies the last pre-transition frame; no post-transition `Last observed` address is printed
 - final player cleanup stops the CAV disc
 - JSON `minFrameNumber` and `maxFrameNumber` reflect frames seen during capture and do not include the earlier frame `60000` disc-end probe
 

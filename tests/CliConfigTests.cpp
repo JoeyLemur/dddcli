@@ -937,6 +937,20 @@ int main()
     assert(cavEndProbeRolloverTimeout(53426) == std::chrono::seconds(221));
     assert(cavEndProbeRolloverTimeout(50374) == std::chrono::seconds(322));
 
+    assert(hasConfirmedClvEndProbeFloor(PlayerStateCli::Pause, 3382, 3382));
+    assert(hasConfirmedClvEndProbeFloor(PlayerStateCli::Stop, 3382, 3382));
+    assert(hasConfirmedClvEndProbeFloor(PlayerStateCli::StillFrame, 3382, 3382));
+    assert(!hasConfirmedClvEndProbeFloor(PlayerStateCli::Play, 3382, 3382));
+    assert(!hasConfirmedClvEndProbeFloor(PlayerStateCli::Pause, 3381, 3382));
+    assert(!hasConfirmedClvEndProbeFloor(PlayerStateCli::Pause, -1, 3382));
+
+    assert(confirmClvEndProbeCompletion(PlayerStateCli::Play, 3382, 5, 3382, false) == ClvEndProbeCompletion::Wrapped);
+    assert(confirmClvEndProbeCompletion(PlayerStateCli::Play, 3381, 5, 3382, false) == ClvEndProbeCompletion::None);
+    assert(confirmClvEndProbeCompletion(PlayerStateCli::Play, 3382, 3383, 3382, true) == ClvEndProbeCompletion::None);
+    assert(confirmClvEndProbeCompletion(PlayerStateCli::Pause, 3383, 3383, 3382, true) == ClvEndProbeCompletion::TerminalState);
+    assert(confirmClvEndProbeCompletion(PlayerStateCli::Pause, 3382, 3382, 3382, false) == ClvEndProbeCompletion::None);
+    assert(confirmClvEndProbeCompletion(PlayerStateCli::Pause, 3383, -1, 3382, true) == ClvEndProbeCompletion::TerminalState);
+
     assert(describeLastObservedAutoCaptureAddress(DiscTypeCli::Cav, 12345) == "Last observed CAV frame number: 12345");
     assert(describeLastObservedAutoCaptureAddress(DiscTypeCli::Clv, 2733) == "Last observed CLV time code: 0:45:33");
     assert(describeLastObservedAutoCaptureAddress(DiscTypeCli::Unknown, 12345).empty());

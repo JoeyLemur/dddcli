@@ -511,10 +511,10 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 rolloverVerified = true;
                 if (!activeOptions.quiet)
                 {
-                    std::cerr << "CAV end probe seek " << (seekAcknowledged ? "acknowledged" : "did not acknowledge")
-                              << "; near-end floor " << discEnd
-                              << ", verified rollover from " << previousProbeFrame
-                              << " to " << frame << "\n";
+                    std::cerr << "CAV end probe: floor " << discEnd
+                              << "; end transition verified"
+                              << (seekAcknowledged ? "" : " (seek unacknowledged)")
+                              << "\n";
                 }
                 break;
             }
@@ -541,37 +541,141 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     }
     else if (needsDiscEndProbe)
     {
-        constexpr int maxClvDiscEndReadAttempts = 5;
         if (!activeOptions.quiet)
         {
             std::cerr << "Searching for CLV disc end time code\n";
         }
         constexpr int latestClvAddressToProbeSeconds = (1 * 60 * 60) + (59 * 60) + 59;
-        if (!player.setPositionTimeCode(latestClvAddressToProbeSeconds))
+        bool seekAcknowledged = player.setPositionTimeCode(latestClvAddressToProbeSeconds);
+        if (!seekAcknowledged)
         {
-            std::cerr << "Could not determine CLV disc length\n";
-            return 1;
-        }
-        for (int attempt = 0; attempt < maxClvDiscEndReadAttempts && discEnd < 0; ++attempt)
-        {
-            if (attempt > 0)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            }
-            discEnd = player.getCurrentTimeCode().address;
+            auto playerState = player.getPlayerState();
             if (stopDuringSetup())
             {
                 return 1;
             }
+            if (playerState == PlayerStateCli::Stop)
+            {
+                if (!activeOptions.quiet)
+                {
+                    std::cerr << "CLV end probe seek was rejected while stopped; spinning up and retrying\n";
+                }
+                if (!player.setPlayerState(PlayerStateCli::Play))
+                {
+                    std::cerr << "Could not spin up player for CLV end probe\n";
+                    return 1;
+                }
+                seekAcknowledged = player.setPositionTimeCode(latestClvAddressToProbeSeconds);
+            }
         }
-        if (discEnd < 0)
+        if (!seekAcknowledged)
         {
+            player.setPlayerState(PlayerStateCli::Pause);
             std::cerr << "Could not determine CLV disc length\n";
             return 1;
         }
-        if (!activeOptions.quiet)
+
+        constexpr auto clvEndProbeSettleInterval = std::chrono::milliseconds(500);
+        constexpr auto clvEndProbeSettleTimeout = std::chrono::seconds(30);
+        auto clvEndProbeDeadline = std::chrono::steady_clock::now() + clvEndProbeSettleTimeout;
+        int previousProbeTimeCode = -1;
+        while (std::chrono::steady_clock::now() < clvEndProbeDeadline && discEnd < 0)
         {
-            std::cerr << "Detected CLV disc end time code: " << formatClvTimeCode(discEnd) << "\n";
+            auto playerState = player.getPlayerState();
+            if (stopDuringSetup())
+            {
+                return 1;
+            }
+            int timeCode = player.getCurrentTimeCode().address;
+            if (stopDuringSetup())
+            {
+                return 1;
+            }
+            if (hasConfirmedClvEndProbeFloor(playerState, previousProbeTimeCode, timeCode))
+            {
+                discEnd = timeCode;
+                break;
+            }
+            if (timeCode >= 0)
+            {
+                previousProbeTimeCode = timeCode;
+            }
+            std::this_thread::sleep_for(clvEndProbeSettleInterval);
+        }
+        if (discEnd < 0)
+        {
+            player.setPlayerState(PlayerStateCli::Pause);
+            std::cerr << "CLV end probe seek acknowledged but did not reach a stable terminal time code within "
+                      << std::chrono::duration_cast<std::chrono::seconds>(clvEndProbeSettleTimeout).count()
+                      << " seconds\n";
+            return 1;
+        }
+
+        if (!player.setPlayerState(PlayerStateCli::Play))
+        {
+            player.setPlayerState(PlayerStateCli::Pause);
+            std::cerr << "Could not start CLV end probe playback\n";
+            return 1;
+        }
+        constexpr auto clvEndProbeConfirmationTimeout = std::chrono::seconds(61);
+        clvEndProbeDeadline = std::chrono::steady_clock::now() + clvEndProbeConfirmationTimeout;
+        previousProbeTimeCode = discEnd;
+        bool advancedPastNearEndFloor = false;
+        auto clvEndProbeCompletion = ClvEndProbeCompletion::None;
+        while (std::chrono::steady_clock::now() < clvEndProbeDeadline &&
+            clvEndProbeCompletion == ClvEndProbeCompletion::None)
+        {
+            auto playerState = player.getPlayerState();
+            if (stopDuringSetup())
+            {
+                return 1;
+            }
+            int timeCode = player.getCurrentTimeCode().address;
+            if (stopDuringSetup())
+            {
+                return 1;
+            }
+            if (timeCode > discEnd)
+            {
+                advancedPastNearEndFloor = true;
+            }
+            clvEndProbeCompletion = confirmClvEndProbeCompletion(
+                playerState,
+                previousProbeTimeCode,
+                timeCode,
+                discEnd,
+                advancedPastNearEndFloor);
+            if (clvEndProbeCompletion == ClvEndProbeCompletion::Wrapped)
+            {
+                if (!activeOptions.quiet)
+                {
+                    std::cerr << "CLV end probe: floor " << formatClvTimeCode(discEnd)
+                              << "; end transition verified\n";
+                }
+                break;
+            }
+            if (clvEndProbeCompletion == ClvEndProbeCompletion::TerminalState)
+            {
+                if (!activeOptions.quiet)
+                {
+                    std::cerr << "CLV end probe: floor " << formatClvTimeCode(discEnd)
+                              << "; end transition verified\n";
+                }
+                break;
+            }
+            if (timeCode >= 0)
+            {
+                previousProbeTimeCode = timeCode;
+            }
+            std::this_thread::sleep_for(clvEndProbeSettleInterval);
+        }
+        if (clvEndProbeCompletion == ClvEndProbeCompletion::None)
+        {
+            player.setPlayerState(PlayerStateCli::Pause);
+            std::cerr << "CLV end probe seek acknowledged; near-end floor " << formatClvTimeCode(discEnd)
+                      << " did not verify a rollover or terminal state after advancing within "
+                      << clvEndProbeConfirmationTimeout.count() << " seconds\n";
+            return 1;
         }
         if (stopDuringSetup())
         {
@@ -702,6 +806,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     int consecutiveAddressReadFailures = 0;
     constexpr int maxConsecutiveAddressReadFailures = 3;
     AutoCaptureStopState stopState;
+    bool stoppedOnEndTransition = false;
     while (!autoCaptureError && !stopRequested && usb.GetTransferInProgress())
     {
         auto now = std::chrono::steady_clock::now();
@@ -749,12 +854,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             if (activeOptions.discType == DiscTypeCli::Clv &&
                 shouldStopAutoCaptureOnClvWrap(lastAddress, address, endAddress))
             {
+                stoppedOnEndTransition = true;
                 if (!activeOptions.quiet)
                 {
                     progress.clear();
-                    std::cerr << "CLV time code wrapped from " << formatClvTimeCode(lastAddress)
-                              << " to " << formatClvTimeCode(address)
-                              << " near requested end; stopping capture\n";
+                    std::cerr << "CLV end transition detected near requested end; stopping capture\n";
                 }
                 break;
             }
@@ -764,11 +868,10 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 progress.clear();
                 if (stopCavCaptureOnWrap)
                 {
+                    stoppedOnEndTransition = true;
                     if (!activeOptions.quiet)
                     {
-                        std::cerr << "CAV frame wrapped from " << lastAddress
-                                  << " to " << address
-                                  << " after near-end floor " << discEnd
+                        std::cerr << "CAV end transition detected after frame " << lastAddress
                                   << "; stopping capture\n";
                     }
                     break;
@@ -837,7 +940,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    if (!activeOptions.quiet)
+    if (!activeOptions.quiet && !stoppedOnEndTransition)
     {
         auto lastObservedAddressDescription = describeLastObservedAutoCaptureAddress(activeOptions.discType, lastObservedAddress);
         if (!lastObservedAddressDescription.empty())

@@ -46,6 +46,37 @@ bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor)
         previousFrame - currentFrame > minimumCavWrapFrameDrop;
 }
 
+bool hasConfirmedClvEndProbeFloor(PlayerStateCli playerState, int previousTimeCode, int currentTimeCode)
+{
+    bool terminalState = playerState == PlayerStateCli::Stop ||
+        playerState == PlayerStateCli::Pause ||
+        playerState == PlayerStateCli::StillFrame;
+    return terminalState && previousTimeCode >= 0 && previousTimeCode == currentTimeCode;
+}
+
+ClvEndProbeCompletion confirmClvEndProbeCompletion(
+    PlayerStateCli playerState,
+    int previousTimeCode,
+    int currentTimeCode,
+    int nearEndFloor,
+    bool advancedPastNearEndFloor)
+{
+    if (previousTimeCode >= nearEndFloor &&
+        currentTimeCode >= 0 &&
+        nearEndFloor >= 0 &&
+        currentTimeCode < previousTimeCode)
+    {
+        return ClvEndProbeCompletion::Wrapped;
+    }
+
+    bool terminalState = playerState == PlayerStateCli::Stop ||
+        playerState == PlayerStateCli::Pause ||
+        playerState == PlayerStateCli::StillFrame;
+    return terminalState && advancedPastNearEndFloor
+        ? ClvEndProbeCompletion::TerminalState
+        : ClvEndProbeCompletion::None;
+}
+
 std::string describeLastObservedAutoCaptureAddress(DiscTypeCli discType, int address)
 {
     if (address < 0)
