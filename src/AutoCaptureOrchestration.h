@@ -5,6 +5,7 @@
 
 #include "CaptureMetadata.h"
 #include "CliConfig.h"
+#include <chrono>
 
 enum class AutoCaptureFinalPlayerAction
 {
@@ -14,6 +15,8 @@ enum class AutoCaptureFinalPlayerAction
 };
 
 void recordAutoCaptureAddress(CaptureMetadata& metadata, DiscTypeCli discType, int address);
-std::string describeLastValidAutoCaptureAddress(DiscTypeCli discType, int address);
+std::chrono::seconds cavEndProbeRolloverTimeout(int nearEndFloor);
+bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor);
+std::string describeLastObservedAutoCaptureAddress(DiscTypeCli discType, int address);
 bool shouldFailCavStillFrameResume(DiscTypeCli discType, PlayerStateCli playerState, bool resumeSucceeded);
 AutoCaptureFinalPlayerAction finalPlayerActionForAutoCapture(DiscTypeCli discType, bool autoCaptureError);

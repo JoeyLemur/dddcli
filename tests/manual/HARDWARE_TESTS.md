@@ -336,8 +336,10 @@ Run a whole-disc CAV auto-capture. Use the shortest suitable test disc if captur
 Expected:
 
 - player probes the CAV end, spins down, then captures from lead-in/playback start
-- capture reaches the detected final frame and does not stop before that frame
-- capture stops when the reported frame is at or beyond the detected end frame
+- probe logs a near-end still-frame floor, then verifies a frame rollover while playing with stop codes disabled; a probe that cannot verify rollover aborts before USB capture starts
+- capture continues beyond the probe floor and stops on the verified frame rollover
+- the rollover restart frame is excluded from JSON `maxFrameNumber`
+- `Last observed CAV frame number` may be the wrapped restart frame; the preceding rollover message identifies the last pre-wrap frame
 - final player cleanup stops the CAV disc
 - JSON `minFrameNumber` and `maxFrameNumber` reflect frames seen during capture and do not include the earlier frame `60000` disc-end probe
 

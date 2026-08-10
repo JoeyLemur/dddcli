@@ -553,6 +553,7 @@ void applyDetectedDiscType(CliOptions& options, DiscTypeCli discType)
 }
 
 AutoCaptureEndAddress resolveAutoCaptureEndAddress(
+    DiscTypeCli discType,
     AutoCaptureModeCli mode,
     int requestedEndAddress,
     int startAddress,
@@ -566,9 +567,15 @@ AutoCaptureEndAddress resolveAutoCaptureEndAddress(
         return result;
     }
 
-    result.endAddress = requestedEndAddress > 0 ? std::min(requestedEndAddress, discEndAddress) : discEndAddress;
-    result.cappedToDiscEnd = requestedEndAddress > discEndAddress;
-    result.usesDetectedDiscEnd = requestedEndAddress <= 0 || result.cappedToDiscEnd;
+    bool useRequestedCavLeadInEnd = discType == DiscTypeCli::Cav &&
+        mode == AutoCaptureModeCli::LeadIn &&
+        requestedEndAddress > 0;
+    result.endAddress = useRequestedCavLeadInEnd
+        ? requestedEndAddress
+        : (requestedEndAddress > 0 ? std::min(requestedEndAddress, discEndAddress) : discEndAddress);
+    result.cappedToDiscEnd = !useRequestedCavLeadInEnd && requestedEndAddress > discEndAddress;
+    result.usesDetectedDiscEnd = !useRequestedCavLeadInEnd &&
+        (requestedEndAddress <= 0 || result.cappedToDiscEnd);
     if (mode == AutoCaptureModeCli::Partial && result.endAddress <= startAddress)
     {
         result.validRange = false;

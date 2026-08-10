@@ -10,7 +10,9 @@
 
 `partial` requires `--end-address`, and the normalized end address must be greater than the start address.
 
-For `whole-disc`, the detected disc end is always used. For `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. `partial` uses the requested `--end-address` directly and does not perform the disc-end probe. To detect the end address for whole-disc and lead-in modes, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
+Whole-disc CLV captures use the detected disc end. For CLV `lead-in`, a supplied `--end-address` is capped to the detected disc end; without an end address, the detected disc end is used. Whole-disc CAV and unbounded CAV lead-in captures use verified rollover instead. CAV `lead-in` uses a supplied end frame exactly. `partial` uses the requested `--end-address` directly and does not perform the disc-end probe. To determine the end behavior for whole-disc and lead-in modes, CAV captures seek to frame `60000`, while CLV captures seek to `1:59:59` before reading the player-reported address.
+
+A CAV end probe first obtains a valid still-frame address after seeking to frame `60000`; this is a near-end floor, not an exact disc end. It then plays with stop codes disabled and verifies that the player rolls over to an earlier frame. A rollover directly from the floor is also accepted because some players delay the play-command response until after playback has already crossed the end. This happens even if the seek itself does not acknowledge, which is expected on some players for an impossible seek. If the probe cannot obtain a valid still-frame floor within 30 seconds, auto-capture aborts before starting USB capture. Rollover verification has a 31-second minimum and extends enough for playback to cover the remaining distance from the returned floor to frame `60000` at normal CAV speed, ensuring an early stop-code floor does not cause a false timeout.
 
 Whole-disc CLV capture starts from spin-down/lead-in and stops at the detected player-reported end timecode. It does not require the first playable CLV timecode to be `0:00:00`; a disc that begins at a later displayed timecode is still tracked by the actual addresses returned by the player.
 
@@ -30,13 +32,17 @@ CAV uses frame addresses. CLV uses player-reported timecodes normalized to secon
 
 ## CAV Stop Behavior
 
-CAV captures stop when the reported frame address reaches or passes the end address:
+CAV partial captures and CAV lead-in captures with `--end-address` stop when the reported frame address reaches or passes the requested end address:
 
 ```text
 address >= endAddress
 ```
 
 A CAV frame is an exact frame address, so there is no CLV-style need to continue capturing through the rest of a displayed second. Polling latency can capture a little extra data, but it should not drop the requested final frame.
+
+Whole-disc CAV captures and CAV lead-in captures without `--end-address` stop when the player rolls over from a frame beyond the validated near-end floor to an earlier frame. The wrapped restart frame is not included in metadata. A bounded CAV lead-in capture that rolls over before its requested end fails instead of being reported as complete.
+
+At the end of auto-capture, the CLI prints the last player address it observed. This is a serial polling result, not a claim that the value is the physical final frame of the disc; use metadata `maxFrameNumber` or `maxTimeCode` for the maximum address observed while capture was active.
 
 If a CAV capture falls into still-frame during capture, the CLI attempts to resume play.
 

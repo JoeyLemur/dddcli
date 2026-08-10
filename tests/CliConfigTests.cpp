@@ -775,39 +775,48 @@ int main()
     assertClvAddressThrows("01234000");
     assertClvAddressThrows("999999999999999999999999");
 
-    auto wholeDiscEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::WholeDisc, 90, 60, 75);
+    auto wholeDiscEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Clv, AutoCaptureModeCli::WholeDisc, 90, 60, 75);
     assert(wholeDiscEnd.endAddress == 75);
     assert(!wholeDiscEnd.cappedToDiscEnd);
     assert(wholeDiscEnd.usesDetectedDiscEnd);
     assert(wholeDiscEnd.validRange);
-    auto leadInDefaultEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::LeadIn, 0, 0, 75);
+    auto leadInDefaultEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Clv, AutoCaptureModeCli::LeadIn, 0, 0, 75);
     assert(leadInDefaultEnd.endAddress == 75);
     assert(!leadInDefaultEnd.cappedToDiscEnd);
     assert(leadInDefaultEnd.usesDetectedDiscEnd);
     assert(leadInDefaultEnd.validRange);
-    auto leadInCappedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::LeadIn, 90, 0, 75);
+    auto cavWholeDiscEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Cav, AutoCaptureModeCli::WholeDisc, 90, 60, 75);
+    assert(cavWholeDiscEnd.usesDetectedDiscEnd);
+    auto cavLeadInDefaultEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Cav, AutoCaptureModeCli::LeadIn, 0, 0, 75);
+    assert(cavLeadInDefaultEnd.usesDetectedDiscEnd);
+    auto leadInCappedEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Clv, AutoCaptureModeCli::LeadIn, 90, 0, 75);
     assert(leadInCappedEnd.endAddress == 75);
     assert(leadInCappedEnd.cappedToDiscEnd);
     assert(leadInCappedEnd.usesDetectedDiscEnd);
     assert(leadInCappedEnd.validRange);
-    auto partialCappedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 90, 60, 75);
+    auto cavLeadInRequestedEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Cav, AutoCaptureModeCli::LeadIn, 90, 0, 75);
+    assert(cavLeadInRequestedEnd.endAddress == 90);
+    assert(!cavLeadInRequestedEnd.cappedToDiscEnd);
+    assert(!cavLeadInRequestedEnd.usesDetectedDiscEnd);
+    assert(cavLeadInRequestedEnd.validRange);
+    auto partialCappedEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Clv, AutoCaptureModeCli::Partial, 90, 60, 75);
     assert(partialCappedEnd.endAddress == 75);
     assert(partialCappedEnd.cappedToDiscEnd);
     assert(partialCappedEnd.usesDetectedDiscEnd);
     assert(partialCappedEnd.validRange);
-    auto partialRequestedEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 70, 60, 75);
+    auto partialRequestedEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Clv, AutoCaptureModeCli::Partial, 70, 60, 75);
     assert(partialRequestedEnd.endAddress == 70);
     assert(!partialRequestedEnd.cappedToDiscEnd);
     assert(!partialRequestedEnd.usesDetectedDiscEnd);
     assert(partialRequestedEnd.validRange);
-    auto partialInvalidEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::Partial, 90, 75, 75);
+    auto partialInvalidEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Clv, AutoCaptureModeCli::Partial, 90, 75, 75);
     assert(partialInvalidEnd.endAddress == 75);
     assert(partialInvalidEnd.cappedToDiscEnd);
     assert(partialInvalidEnd.usesDetectedDiscEnd);
     assert(!partialInvalidEnd.validRange);
 
     assert(clvEndAddressPostRoll(wholeDiscEnd, 75) == ClvSecondAddressPostRoll);
-    auto wholeDiscMinuteEnd = resolveAutoCaptureEndAddress(AutoCaptureModeCli::WholeDisc, 0, 0, 3600);
+    auto wholeDiscMinuteEnd = resolveAutoCaptureEndAddress(DiscTypeCli::Clv, AutoCaptureModeCli::WholeDisc, 0, 0, 3600);
     assert(clvEndAddressPostRoll(wholeDiscMinuteEnd, 3600) == ClvMinuteAddressPostRoll);
     assert(clvEndAddressPostRoll(partialRequestedEnd, 3600) == ClvSecondAddressPostRoll);
 
@@ -914,10 +923,24 @@ int main()
     assert(!clvMetadata.minFrameNumber.has_value());
     assert(!clvMetadata.maxFrameNumber.has_value());
 
-    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Cav, 12345) == "Last valid CAV frame number: 12345");
-    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Clv, 2733) == "Last valid CLV time code: 0:45:33");
-    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Unknown, 12345).empty());
-    assert(describeLastValidAutoCaptureAddress(DiscTypeCli::Clv, -1).empty());
+    assert(shouldStopCavOnWrap(53417, 235, 53288));
+    assert(shouldStopCavOnWrap(53288, 235, 53288));
+    assert(!shouldStopCavOnWrap(53287, 235, 53288));
+    assert(!shouldStopCavOnWrap(53417, 53300, 53288));
+    assert(!shouldStopCavOnWrap(53417, 53418, 53288));
+    assert(!shouldStopCavOnWrap(-1, 235, 53288));
+    assert(!shouldStopCavOnWrap(53417, -1, 53288));
+    assert(!shouldStopCavOnWrap(53417, 235, -1));
+
+    assert(cavEndProbeRolloverTimeout(-1) == std::chrono::seconds(31));
+    assert(cavEndProbeRolloverTimeout(60000) == std::chrono::seconds(31));
+    assert(cavEndProbeRolloverTimeout(53426) == std::chrono::seconds(221));
+    assert(cavEndProbeRolloverTimeout(50374) == std::chrono::seconds(322));
+
+    assert(describeLastObservedAutoCaptureAddress(DiscTypeCli::Cav, 12345) == "Last observed CAV frame number: 12345");
+    assert(describeLastObservedAutoCaptureAddress(DiscTypeCli::Clv, 2733) == "Last observed CLV time code: 0:45:33");
+    assert(describeLastObservedAutoCaptureAddress(DiscTypeCli::Unknown, 12345).empty());
+    assert(describeLastObservedAutoCaptureAddress(DiscTypeCli::Clv, -1).empty());
 
     assert(shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::StillFrame, false));
     assert(!shouldFailCavStillFrameResume(DiscTypeCli::Cav, PlayerStateCli::StillFrame, true));

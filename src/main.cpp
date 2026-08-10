@@ -451,7 +451,6 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
 
     int discEnd = -1;
     bool needsDiscEndProbe = activeOptions.autoCaptureMode != AutoCaptureModeCli::Partial;
-    constexpr int maxDiscEndReadAttempts = 5;
     if (needsDiscEndProbe && activeOptions.discType == DiscTypeCli::Cav)
     {
         if (!activeOptions.quiet)
@@ -459,30 +458,81 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             std::cerr << "Searching for CAV disc end frame\n";
         }
         bool seekAcknowledged = player.setPositionFrame(60000);
-        for (int attempt = 0; attempt < maxDiscEndReadAttempts && discEnd < 0; ++attempt)
+        constexpr auto cavEndProbeSettleInterval = std::chrono::milliseconds(500);
+        constexpr auto cavEndProbeSettleTimeout = std::chrono::seconds(30);
+        auto cavEndProbeDeadline = std::chrono::steady_clock::now() + cavEndProbeSettleTimeout;
+        while (std::chrono::steady_clock::now() < cavEndProbeDeadline && discEnd < 0)
         {
-            if (attempt > 0)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            }
-            discEnd = player.getCurrentFrame().address;
+            auto playerState = player.getPlayerState();
             if (stopDuringSetup())
             {
                 return 1;
             }
+            int frame = player.getCurrentFrame().address;
+            if (stopDuringSetup())
+            {
+                return 1;
+            }
+            if (playerState == PlayerStateCli::StillFrame && frame >= 0)
+            {
+                discEnd = frame;
+                break;
+            }
+            std::this_thread::sleep_for(cavEndProbeSettleInterval);
         }
         if (discEnd < 0)
         {
-            std::cerr << "Could not determine CAV disc length\n";
+            player.setPlayerState(PlayerStateCli::StillFrame);
+            std::cerr << "CAV end probe seek " << (seekAcknowledged ? "acknowledged" : "did not acknowledge")
+                      << " and did not reach a valid still-frame address within "
+                      << std::chrono::duration_cast<std::chrono::seconds>(cavEndProbeSettleTimeout).count()
+                      << " seconds\n";
             return 1;
         }
-        if (!seekAcknowledged)
+        if (!player.setPlayerState(PlayerStateCli::PlayWithStopCodesDisabled))
         {
-            std::cerr << "CAV end probe seek did not acknowledge, using reported frame " << discEnd << "\n";
+            player.setPlayerState(PlayerStateCli::StillFrame);
+            std::cerr << "Could not start CAV end probe playback with stop codes disabled\n";
+            return 1;
         }
-        else if (!activeOptions.quiet)
+        int previousProbeFrame = discEnd;
+        bool rolloverVerified = false;
+        auto cavRolloverTimeout = cavEndProbeRolloverTimeout(discEnd);
+        cavEndProbeDeadline = std::chrono::steady_clock::now() + cavRolloverTimeout;
+        while (std::chrono::steady_clock::now() < cavEndProbeDeadline && !rolloverVerified)
         {
-            std::cerr << "Detected CAV disc end frame: " << discEnd << "\n";
+            int frame = player.getCurrentFrame().address;
+            if (stopDuringSetup())
+            {
+                return 1;
+            }
+            if (shouldStopCavOnWrap(previousProbeFrame, frame, discEnd))
+            {
+                rolloverVerified = true;
+                if (!activeOptions.quiet)
+                {
+                    std::cerr << "CAV end probe seek " << (seekAcknowledged ? "acknowledged" : "did not acknowledge")
+                              << "; near-end floor " << discEnd
+                              << ", verified rollover from " << previousProbeFrame
+                              << " to " << frame << "\n";
+                }
+                break;
+            }
+            if (frame >= 0)
+            {
+                previousProbeFrame = frame;
+            }
+            std::this_thread::sleep_for(cavEndProbeSettleInterval);
+        }
+        if (!rolloverVerified)
+        {
+            player.setPlayerState(PlayerStateCli::StillFrame);
+            std::cerr << "CAV end probe seek " << (seekAcknowledged ? "acknowledged" : "did not acknowledge")
+                      << "; near-end floor " << discEnd
+                      << " did not roll over within "
+                      << cavRolloverTimeout.count()
+                      << " seconds\n";
+            return 1;
         }
         if (stopDuringSetup())
         {
@@ -491,6 +541,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     }
     else if (needsDiscEndProbe)
     {
+        constexpr int maxClvDiscEndReadAttempts = 5;
         if (!activeOptions.quiet)
         {
             std::cerr << "Searching for CLV disc end time code\n";
@@ -501,7 +552,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
             std::cerr << "Could not determine CLV disc length\n";
             return 1;
         }
-        for (int attempt = 0; attempt < maxDiscEndReadAttempts && discEnd < 0; ++attempt)
+        for (int attempt = 0; attempt < maxClvDiscEndReadAttempts && discEnd < 0; ++attempt)
         {
             if (attempt > 0)
             {
@@ -532,6 +583,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     if (needsDiscEndProbe)
     {
         resolvedEnd = resolveAutoCaptureEndAddress(
+            activeOptions.discType,
             activeOptions.autoCaptureMode,
             activeOptions.endAddress,
             activeOptions.startAddress,
@@ -554,6 +606,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                   << "; capturing to detected disc end\n";
     }
     int endAddress = resolvedEnd.endAddress;
+    bool stopCavCaptureOnWrap = activeOptions.discType == DiscTypeCli::Cav && resolvedEnd.usesDetectedDiscEnd;
     auto clvPostRoll = clvEndAddressPostRoll(resolvedEnd, discEnd);
     if (activeOptions.discType == DiscTypeCli::Clv && clvPostRoll == ClvMinuteAddressPostRoll && !activeOptions.quiet)
     {
@@ -645,6 +698,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     }
 
     int lastAddress = -1;
+    int lastObservedAddress = -1;
     int consecutiveAddressReadFailures = 0;
     constexpr int maxConsecutiveAddressReadFailures = 3;
     AutoCaptureStopState stopState;
@@ -667,7 +721,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         }
         if (activeOptions.discType == DiscTypeCli::Cav && playerState == PlayerStateCli::StillFrame)
         {
-            bool resumed = player.setPlayerState(PlayerStateCli::Play);
+            bool resumed = player.setPlayerState(playState);
             if (shouldFailCavStillFrameResume(activeOptions.discType, playerState, resumed))
             {
                 autoCaptureError = true;
@@ -691,6 +745,7 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         if (address >= 0)
         {
             consecutiveAddressReadFailures = 0;
+            lastObservedAddress = address;
             if (activeOptions.discType == DiscTypeCli::Clv &&
                 shouldStopAutoCaptureOnClvWrap(lastAddress, address, endAddress))
             {
@@ -703,8 +758,29 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 }
                 break;
             }
+            if (activeOptions.discType == DiscTypeCli::Cav &&
+                shouldStopCavOnWrap(lastAddress, address, discEnd))
+            {
+                progress.clear();
+                if (stopCavCaptureOnWrap)
+                {
+                    if (!activeOptions.quiet)
+                    {
+                        std::cerr << "CAV frame wrapped from " << lastAddress
+                                  << " to " << address
+                                  << " after near-end floor " << discEnd
+                                  << "; stopping capture\n";
+                    }
+                    break;
+                }
+                autoCaptureError = true;
+                autoCaptureErrorMessage = "CAV disc rolled over before requested end address " + std::to_string(endAddress);
+                std::cerr << autoCaptureErrorMessage << "\n";
+                break;
+            }
             recordAutoCaptureAddress(metadata, activeOptions.discType, address);
-            if (shouldStopAutoCaptureAtAddress(activeOptions.discType, address, endAddress, now, stopState, clvPostRoll))
+            if (!stopCavCaptureOnWrap &&
+                shouldStopAutoCaptureAtAddress(activeOptions.discType, address, endAddress, now, stopState, clvPostRoll))
             {
                 break;
             }
@@ -763,11 +839,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
 
     if (!activeOptions.quiet)
     {
-        auto lastValidAddress = describeLastValidAutoCaptureAddress(activeOptions.discType, lastAddress);
-        if (!lastValidAddress.empty())
+        auto lastObservedAddressDescription = describeLastObservedAutoCaptureAddress(activeOptions.discType, lastObservedAddress);
+        if (!lastObservedAddressDescription.empty())
         {
             progress.clear();
-            std::cerr << lastValidAddress << "\n";
+            std::cerr << lastObservedAddressDescription << "\n";
         }
     }
     progress.finish();

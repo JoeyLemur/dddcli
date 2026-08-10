@@ -131,6 +131,7 @@ int parseClvAddressSeconds(const std::string& value);
 std::string formatClvTimeCode(int seconds);
 void applyDetectedDiscType(CliOptions& options, DiscTypeCli discType);
 AutoCaptureEndAddress resolveAutoCaptureEndAddress(
+    DiscTypeCli discType,
     AutoCaptureModeCli mode,
     int requestedEndAddress,
     int startAddress,

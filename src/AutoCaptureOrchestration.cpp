@@ -22,7 +22,31 @@ void recordAutoCaptureAddress(CaptureMetadata& metadata, DiscTypeCli discType, i
     }
 }
 
-std::string describeLastValidAutoCaptureAddress(DiscTypeCli discType, int address)
+std::chrono::seconds cavEndProbeRolloverTimeout(int nearEndFloor)
+{
+    constexpr int cavEndProbeTargetFrame = 60000;
+    constexpr int cavFramesPerSecond = 30;
+    constexpr auto minimumTimeout = std::chrono::seconds(31);
+    if (nearEndFloor < 0 || nearEndFloor >= cavEndProbeTargetFrame)
+    {
+        return minimumTimeout;
+    }
+
+    int remainingFrames = cavEndProbeTargetFrame - nearEndFloor;
+    int timeoutSeconds = (remainingFrames + cavFramesPerSecond - 1) / cavFramesPerSecond;
+    return std::max(minimumTimeout, std::chrono::seconds(timeoutSeconds + 1));
+}
+
+bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor)
+{
+    constexpr int minimumCavWrapFrameDrop = 1000;
+    return previousFrame >= nearEndFloor &&
+        currentFrame >= 0 &&
+        nearEndFloor >= 0 &&
+        previousFrame - currentFrame > minimumCavWrapFrameDrop;
+}
+
+std::string describeLastObservedAutoCaptureAddress(DiscTypeCli discType, int address)
 {
     if (address < 0)
     {
@@ -30,11 +54,11 @@ std::string describeLastValidAutoCaptureAddress(DiscTypeCli discType, int addres
     }
     if (discType == DiscTypeCli::Cav)
     {
-        return "Last valid CAV frame number: " + std::to_string(address);
+        return "Last observed CAV frame number: " + std::to_string(address);
     }
     if (discType == DiscTypeCli::Clv)
     {
-        return "Last valid CLV time code: " + formatClvTimeCode(address);
+        return "Last observed CLV time code: " + formatClvTimeCode(address);
     }
     return {};
 }
