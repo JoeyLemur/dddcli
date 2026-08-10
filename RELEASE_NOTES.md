@@ -1,5 +1,16 @@
 # Release notes
 
+## v1.1.2 — 2026-08-10
+
+This release extends reliable auto-capture end detection to CLV discs and makes
+end-of-disc reporting clearer.
+
+- CLV end probing now requires a stable terminal timecode after the far seek, then verifies a backward end transition or a terminal state after playback advances past that floor.
+- A CLV player that rejects the far seek while stopped is spun up and retried once before capture is allowed to start.
+- CAV and CLV console output now reports concise verified/detected end transitions instead of noisy post-end address changes.
+- When an end transition completes capture, the CLI suppresses the misleading post-transition `Last observed` address; normal capture stops still report it.
+- The CLV path was hardware-validated on a Pioneer LD-V2200, including two successful whole-side captures.
+
 ## v1.1.1 — 2026-08-10
 
 This release makes CAV auto-capture reliably detect the physical end of discs
