@@ -883,8 +883,11 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 }
                 break;
             }
+            bool cavFrameWrapped = activeOptions.discType == DiscTypeCli::Cav &&
+                hasCavFrameWrapped(lastAddress, address);
             if (activeOptions.discType == DiscTypeCli::Cav &&
-                shouldStopCavOnWrap(lastAddress, address, discEnd))
+                ((stopCavCaptureOnWrap && cavFrameWrapped) ||
+                    shouldStopCavOnWrap(lastAddress, address, discEnd)))
             {
                 progress.clear();
                 if (stopCavCaptureOnWrap)
@@ -893,6 +896,8 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                     if (!activeOptions.quiet)
                     {
                         std::cerr << "CAV end transition detected after frame " << lastAddress
+                                  << (lastAddress < discEnd ? " before probe floor " : " at or beyond probe floor ")
+                                  << discEnd
                                   << "; stopping capture\n";
                     }
                     break;

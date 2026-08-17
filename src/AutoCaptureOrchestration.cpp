@@ -90,13 +90,19 @@ std::chrono::seconds cavEndProbeRolloverTimeout(int nearEndFloor)
     return std::max(minimumTimeout, std::chrono::seconds(timeoutSeconds + 1));
 }
 
-bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor)
+bool hasCavFrameWrapped(int previousFrame, int currentFrame)
 {
     constexpr int minimumCavWrapFrameDrop = 1000;
-    return previousFrame >= nearEndFloor &&
+    return previousFrame >= 0 &&
         currentFrame >= 0 &&
-        nearEndFloor >= 0 &&
         previousFrame - currentFrame > minimumCavWrapFrameDrop;
+}
+
+bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor)
+{
+    return previousFrame >= nearEndFloor &&
+        nearEndFloor >= 0 &&
+        hasCavFrameWrapped(previousFrame, currentFrame);
 }
 
 bool hasConfirmedClvEndProbeFloor(PlayerStateCli playerState, int previousTimeCode, int currentTimeCode)

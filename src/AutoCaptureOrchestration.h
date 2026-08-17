@@ -37,6 +37,7 @@ bool hasAutoCapturePositionStalled(
     const std::chrono::steady_clock::time_point& now,
     AutoCapturePositionWatchdogState& state);
 std::chrono::seconds cavEndProbeRolloverTimeout(int nearEndFloor);
+bool hasCavFrameWrapped(int previousFrame, int currentFrame);
 bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor);
 bool hasConfirmedClvEndProbeFloor(PlayerStateCli playerState, int previousTimeCode, int currentTimeCode);
 ClvEndProbeCompletion confirmClvEndProbeCompletion(

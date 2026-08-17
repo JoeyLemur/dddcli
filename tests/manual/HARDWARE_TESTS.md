@@ -339,7 +339,7 @@ Expected:
 
 - player probes the CAV end, spins down, then captures from lead-in/playback start
 - probe logs a near-end still-frame floor, then verifies an end transition while playing with stop codes disabled; a probe that cannot verify that transition aborts before USB capture starts
-- capture continues beyond the probe floor and stops on the verified frame end transition
+- capture stops on the verified large backward frame end transition, including one reported before the probe's still-frame floor
 - the post-transition frame is excluded from JSON `maxFrameNumber`
 - the end-transition message identifies the last pre-transition frame; no post-transition `Last observed` address is printed
 - final player cleanup stops the CAV disc

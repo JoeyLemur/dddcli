@@ -48,7 +48,7 @@ address >= endAddress
 
 A CAV frame is an exact frame address, so there is no CLV-style need to continue capturing through the rest of a displayed second. Polling latency can capture a little extra data, but it should not drop the requested final frame.
 
-Whole-disc CAV captures and CAV lead-in captures without `--end-address` stop when the player makes an end transition from a frame beyond the validated near-end floor to an earlier frame. The post-transition address is not included in metadata. A bounded CAV lead-in capture that makes an end transition before its requested end fails instead of being reported as complete.
+Whole-disc CAV captures and CAV lead-in captures without `--end-address` stop when the player makes a large backward end transition to an earlier frame. The end probe verifies that this transition pattern exists, but its still-frame floor is not treated as an exact capture-time threshold: player-reported frames can transition before that floor after the disc restarts. The post-transition address is not included in metadata. A bounded CAV lead-in capture that makes an end transition before its requested end fails instead of being reported as complete.
 
 At the end of auto-capture, the CLI normally prints the last player address it observed. This is a serial polling result, not a claim that the value is the physical final frame of the disc; use metadata `maxFrameNumber` or `maxTimeCode` for the maximum address observed while capture was active. When capture stops on an end transition, the CLI instead reports the pre-transition address in the end-transition message and suppresses the post-transition address.
 

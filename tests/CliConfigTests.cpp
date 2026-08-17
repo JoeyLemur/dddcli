@@ -965,6 +965,10 @@ int main()
 
     assert(shouldStopCavOnWrap(53417, 235, 53288));
     assert(shouldStopCavOnWrap(53288, 235, 53288));
+    assert(hasCavFrameWrapped(32658, 31657));
+    assert(!hasCavFrameWrapped(32657, 31657));
+    assert(!hasCavFrameWrapped(-1, 235));
+    assert(!hasCavFrameWrapped(53417, -1));
     assert(!shouldStopCavOnWrap(53287, 235, 53288));
     assert(!shouldStopCavOnWrap(53417, 53300, 53288));
     assert(!shouldStopCavOnWrap(53417, 53418, 53288));
