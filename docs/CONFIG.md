@@ -113,6 +113,7 @@ Auto-capture options:
 - `--start-address <n>` and `--end-address <n>`: frame address for CAV, normalized seconds or compact timecode for CLV. Partial auto-capture requires the normalized end address to be greater than the start address.
 - `--key-lock`: key-lock the player during capture and release it during cleanup. If the player cannot enable key lock, auto-capture aborts before capture starts.
 - `--on-screen-display` / `--no-on-screen-display`: turn the player's on-screen display on or off during auto-capture setup. The default is on.
+- `--disable-watchdog`: disable the auto-capture player-position watchdog for one run. The CAV 32-minute and CLV 62-minute safety limits remain enabled.
 
 ## Config Keys
 

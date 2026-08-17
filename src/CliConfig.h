@@ -83,6 +83,7 @@ struct CliOptions
     std::string endAddressText;
     bool keyLock = false;
     bool onScreenDisplay = true;
+    bool disableWatchdog = false;
 };
 
 struct ParsedCommandLine

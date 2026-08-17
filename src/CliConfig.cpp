@@ -306,6 +306,7 @@ bool applyCommandLineOption(ParsedCommandLine& parsed, int& index, int argc, cha
     else if (arg == "--key-lock") parsed.options.keyLock = true;
     else if (arg == "--on-screen-display") parsed.options.onScreenDisplay = true;
     else if (arg == "--no-on-screen-display") parsed.options.onScreenDisplay = false;
+    else if (arg == "--disable-watchdog") parsed.options.disableWatchdog = true;
     else return false;
     return true;
 }
@@ -776,5 +777,6 @@ void printUsage()
         "  --mode whole-disc|lead-in|partial\n"
         "  --start-address <n> --end-address <n>\n"
         "  --key-lock\n"
-        "  --on-screen-display | --no-on-screen-display\n";
+        "  --on-screen-display | --no-on-screen-display\n"
+        "  --disable-watchdog              disable player-position watchdog; duration limit remains\n";
 }

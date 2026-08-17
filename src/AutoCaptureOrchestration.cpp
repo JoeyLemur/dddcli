@@ -22,6 +22,59 @@ void recordAutoCaptureAddress(CaptureMetadata& metadata, DiscTypeCli discType, i
     }
 }
 
+std::optional<std::chrono::seconds> autoCaptureSafetyLimit(DiscTypeCli discType)
+{
+    if (discType == DiscTypeCli::Cav)
+    {
+        return std::chrono::minutes(32);
+    }
+    if (discType == DiscTypeCli::Clv)
+    {
+        return std::chrono::minutes(62);
+    }
+    return std::nullopt;
+}
+
+std::optional<std::chrono::seconds> autoCapturePositionStallTimeout(DiscTypeCli discType)
+{
+    if (discType == DiscTypeCli::Cav)
+    {
+        return std::chrono::seconds(10);
+    }
+    if (discType == DiscTypeCli::Clv)
+    {
+        return std::chrono::seconds(75);
+    }
+    return std::nullopt;
+}
+
+bool hasAutoCapturePositionStalled(
+    DiscTypeCli discType,
+    int address,
+    const std::chrono::steady_clock::time_point& now,
+    AutoCapturePositionWatchdogState& state)
+{
+    if (address < 0)
+    {
+        return false;
+    }
+
+    auto stallTimeout = autoCapturePositionStallTimeout(discType);
+    if (!stallTimeout.has_value())
+    {
+        return false;
+    }
+
+    if (address > state.highestAddress)
+    {
+        state.highestAddress = address;
+        state.lastProgressTime = now;
+        return false;
+    }
+
+    return state.highestAddress >= 0 && now - state.lastProgressTime >= stallTimeout.value();
+}
+
 std::chrono::seconds cavEndProbeRolloverTimeout(int nearEndFloor)
 {
     constexpr int cavEndProbeTargetFrame = 60000;

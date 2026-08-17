@@ -137,6 +137,8 @@ int main()
     assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123");
     progressSnapshot.playerPosition = "timecode=0:01:35";
     assert(formatCaptureProgressLine(progressSnapshot) == "elapsed=42s written=5MiB transfers=123 timecode=0:01:35");
+    assert(formatCaptureDuration(std::chrono::milliseconds(0)) == "0:00:00");
+    assert(formatCaptureDuration(std::chrono::milliseconds(3723456)) == "1:02:03");
 
     std::ostringstream liveOutput;
     ProgressLine liveProgress(liveOutput, false, true);
@@ -209,6 +211,10 @@ int main()
     assert(autoCaptureDurationParsed.options.durationSeconds.value() == 300);
     assert(!hasReachedCaptureDuration(autoCaptureDurationParsed.options, std::chrono::seconds(299)));
     assert(hasReachedCaptureDuration(autoCaptureDurationParsed.options, std::chrono::seconds(300)));
+
+    const char* disableWatchdogArgv[] = { "dddcli", "auto-capture", "--disable-watchdog" };
+    auto disableWatchdogParsed = parseCommandLine(3, const_cast<char**>(disableWatchdogArgv));
+    assert(disableWatchdogParsed.options.disableWatchdog);
 
     const char* flagBeforeCaptureArgv[] = {
         "dddcli",
@@ -351,6 +357,7 @@ int main()
     };
     auto forceOsdParsed = parseCommandLine(5, const_cast<char**>(forceOsdArgv), disabledOsdBase);
     assert(forceOsdParsed.options.onScreenDisplay);
+    assert(!forceOsdParsed.options.disableWatchdog);
 
     const char* validPartialArgv[] = {
         "dddcli",
@@ -766,6 +773,15 @@ int main()
     std::ostringstream metadataJson;
     metadataJson << metadataFile.rdbuf();
     assert(metadataJson.str().find("\"captureFormat\": \"lds\"") != std::string::npos);
+    assert(metadataJson.str().find("\"stopReason\"") == std::string::npos);
+    metadata.stopReason = "player-position-stalled";
+    assert(writeCaptureMetadata(metadataPath, metadata, metadataUsb, error));
+    metadataFile.close();
+    metadataFile.open(metadataPath);
+    metadataJson.str({});
+    metadataJson.clear();
+    metadataJson << metadataFile.rdbuf();
+    assert(metadataJson.str().find("\"stopReason\": \"player-position-stalled\"") != std::string::npos);
     std::filesystem::remove(metadataPath);
 
     assert(parseClvAddressSeconds("754") == 754);
@@ -869,6 +885,30 @@ int main()
     assert(escapedSerialResponse("A\r\n\t\\\x01") == "A\\r\\n\\t\\\\\\x01");
 
     auto now = std::chrono::steady_clock::now();
+    assert(autoCaptureSafetyLimit(DiscTypeCli::Cav).value() == std::chrono::minutes(32));
+    assert(autoCaptureSafetyLimit(DiscTypeCli::Clv).value() == std::chrono::minutes(62));
+    assert(!autoCaptureSafetyLimit(DiscTypeCli::Unknown).has_value());
+    assert(autoCapturePositionStallTimeout(DiscTypeCli::Cav).value() == std::chrono::seconds(10));
+    assert(autoCapturePositionStallTimeout(DiscTypeCli::Clv).value() == std::chrono::seconds(75));
+    assert(!autoCapturePositionStallTimeout(DiscTypeCli::Unknown).has_value());
+
+    AutoCapturePositionWatchdogState cavWatchdog;
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Cav, -1, now, cavWatchdog));
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Cav, 1000, now, cavWatchdog));
+    assert(cavWatchdog.highestAddress == 1000);
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Cav, 1000, now + std::chrono::seconds(9), cavWatchdog));
+    assert(hasAutoCapturePositionStalled(DiscTypeCli::Cav, 999, now + std::chrono::seconds(10), cavWatchdog));
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Cav, 1001, now + std::chrono::seconds(11), cavWatchdog));
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Cav, 1000, now + std::chrono::seconds(20), cavWatchdog));
+    assert(hasAutoCapturePositionStalled(DiscTypeCli::Cav, 1001, now + std::chrono::seconds(21), cavWatchdog));
+
+    AutoCapturePositionWatchdogState clvWatchdog;
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Clv, 60, now, clvWatchdog));
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Clv, 60, now + std::chrono::seconds(59), clvWatchdog));
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Clv, 120, now + std::chrono::seconds(60), clvWatchdog));
+    assert(!hasAutoCapturePositionStalled(DiscTypeCli::Clv, 120, now + std::chrono::seconds(134), clvWatchdog));
+    assert(hasAutoCapturePositionStalled(DiscTypeCli::Clv, 120, now + std::chrono::seconds(135), clvWatchdog));
+
     AutoCaptureStopState cavStop;
     assert(!shouldStopAutoCaptureAtAddress(DiscTypeCli::Cav, 1299, 1300, now, cavStop));
     assert(shouldStopAutoCaptureAtAddress(DiscTypeCli::Cav, 1300, 1300, now, cavStop));

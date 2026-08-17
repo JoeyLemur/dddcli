@@ -19,6 +19,7 @@ struct CaptureProgressSnapshot
 };
 
 std::string formatCaptureProgressLine(const CaptureProgressSnapshot& snapshot);
+std::string formatCaptureDuration(std::chrono::milliseconds duration);
 
 class ProgressLine
 {

@@ -15,6 +15,7 @@ struct CaptureMetadata
     bool testMode = false;
     std::chrono::system_clock::time_point creationTimeUtc;
     std::chrono::milliseconds duration{0};
+    std::string stopReason;
 
     std::string playerModelCode;
     std::string playerModelName;

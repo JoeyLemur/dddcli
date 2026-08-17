@@ -116,6 +116,10 @@ bool writeCaptureMetadata(
     out << "    " << quoted("captureFilePath") << ": " << quoted(metadata.captureFilePath.string()) << ",\n";
     out << "    " << quoted("captureFormat") << ": " << quoted("lds") << ",\n";
     out << "    " << quoted("testMode") << ": " << (metadata.testMode ? "true" : "false") << ",\n";
+    if (!metadata.stopReason.empty())
+    {
+        out << "    " << quoted("stopReason") << ": " << quoted(metadata.stopReason) << ",\n";
+    }
     out << "    " << quoted("transferResult") << ": " << (int)usb.GetTransferResult() << ",\n";
     out << "    " << quoted("transferResultString") << ": " << quoted(transferResultToString(usb.GetTransferResult())) << ",\n";
     out << "    " << quoted("durationInMilliseconds") << ": " << metadata.duration.count() << ",\n";

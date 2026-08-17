@@ -28,6 +28,20 @@ std::string formatCaptureProgressLine(const CaptureProgressSnapshot& snapshot)
     return stream.str();
 }
 
+std::string formatCaptureDuration(std::chrono::milliseconds duration)
+{
+    auto totalSeconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+    auto hours = totalSeconds / (60 * 60);
+    auto minutes = (totalSeconds / 60) % 60;
+    auto seconds = totalSeconds % 60;
+
+    std::ostringstream stream;
+    stream << hours << ':'
+           << (minutes < 10 ? "0" : "") << minutes << ':'
+           << (seconds < 10 ? "0" : "") << seconds;
+    return stream.str();
+}
+
 ProgressLine::ProgressLine(bool quiet)
     : ProgressLine(std::cerr, quiet, isatty(fileno(stderr)) != 0)
 {

@@ -22,6 +22,12 @@ For `whole-disc` and `lead-in`, setup verifies the player is stopped immediately
 
 Auto-capture turns the player's on-screen display on by default with `1DS` before positioning and playback. Use `--no-on-screen-display` or `[auto_capture] on_screen_display = false` to send `0DS` instead when you want the player display disabled during capture.
 
+## Runaway Protection
+
+Every auto-capture has a non-configurable maximum duration: 32 minutes for CAV and 62 minutes for CLV. This safety limit applies to whole-disc, lead-in, and partial captures, and cannot be extended with `--duration`; a shorter `--duration` still stops normally.
+
+Auto-capture also watches the highest player address reported during playback. CAV must advance to a new high-water frame at least once every 10 seconds. CLV must advance to a new high-water timecode at least once every 75 seconds. The longer CLV window allows players that report only minute-granular timecodes. Repeating the same frame or small group of frames does not reset the watchdog. Use `--disable-watchdog` to disable this position check for one auto-capture; it does not disable the 32-/62-minute safety limit. Either active safeguard aborts the capture as an error, stops USB capture cleanly, leaves the player in still-frame for inspection, releases key lock, and writes requested metadata.
+
 Some older CLV discs only expose hour/minute timecode precision. If the detected CLV disc end lands exactly on a minute boundary and the capture range uses that detected end, the CLI treats the end as possibly minute-granular and uses a 61 second end post-roll instead of the normal second-granular post-roll. This avoids cutting off most of the final minute; the capture can still finish earlier if the player stops, pauses, or still-frames during that post-roll.
 
 If a CLV capture reaches the end of its requested range and the player rolls over to an earlier timecode instead of stopping, the CLI treats that wraparound as the end of the range and stops capture.
@@ -83,7 +89,7 @@ When reading player responses, the CLI also accepts compact `HMM`, such as `012`
 
 Auto-capture metadata includes player model, player version, serial speed, disc type, disc status, and observed address bounds from the active capture loop. Disc-end probe addresses are not included in the captured min/max fields. If a near-end CLV wrap triggers capture completion, the wrapped restart address is also excluded from the min/max range.
 
-The sidecar always includes a `captureInfo` object with the capture file path, capture format, test-mode flag, transfer result, duration, transfer and buffer counts, file size, sample statistics, clipping statistics, sequence marker presence, and UTC creation timestamp.
+The sidecar always includes a `captureInfo` object with the capture file path, capture format, test-mode flag, transfer result, duration, transfer and buffer counts, file size, sample statistics, clipping statistics, sequence marker presence, and UTC creation timestamp. A safety-aborted auto-capture also includes `stopReason`, either `safety-duration-limit` or `player-position-stalled`; the USB transfer result remains separate because the output was stopped cleanly.
 
 For CAV captures:
 
@@ -110,6 +116,7 @@ The auto-capture path is designed to clean up on success, capture errors, and in
 - setup interruptions before USB capture starts abort without starting playback.
 - successful CAV and CLV captures end by stopping the player.
 - auto-capture address errors leave the player in still-frame for inspection.
+- runaway safety-limit and player-position watchdog errors leave the player in still-frame for inspection.
 - CAV still-frame resume failures stop capture and leave the player in still-frame for inspection.
 - `SIGINT` and `SIGTERM` request an orderly stop; capture cleanup still runs before the process exits.
 

@@ -6,6 +6,7 @@
 #include "CaptureMetadata.h"
 #include "CliConfig.h"
 #include <chrono>
+#include <optional>
 
 enum class AutoCaptureFinalPlayerAction
 {
@@ -21,7 +22,20 @@ enum class ClvEndProbeCompletion
     TerminalState,
 };
 
+struct AutoCapturePositionWatchdogState
+{
+    int highestAddress = -1;
+    std::chrono::steady_clock::time_point lastProgressTime{};
+};
+
 void recordAutoCaptureAddress(CaptureMetadata& metadata, DiscTypeCli discType, int address);
+std::optional<std::chrono::seconds> autoCaptureSafetyLimit(DiscTypeCli discType);
+std::optional<std::chrono::seconds> autoCapturePositionStallTimeout(DiscTypeCli discType);
+bool hasAutoCapturePositionStalled(
+    DiscTypeCli discType,
+    int address,
+    const std::chrono::steady_clock::time_point& now,
+    AutoCapturePositionWatchdogState& state);
 std::chrono::seconds cavEndProbeRolloverTimeout(int nearEndFloor);
 bool shouldStopCavOnWrap(int previousFrame, int currentFrame, int nearEndFloor);
 bool hasConfirmedClvEndProbeFloor(PlayerStateCli playerState, int previousTimeCode, int currentTimeCode);

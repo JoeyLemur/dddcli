@@ -78,6 +78,7 @@ Run a partial CLV auto-capture:
 ```
 
 Auto-capture turns the player's on-screen display on by default. Use `--no-on-screen-display` when the player OSD should be disabled during capture.
+Use `--disable-watchdog` to opt out of the player-position watchdog for one auto-capture; its fixed CAV/CLV duration limit remains active.
 
 Interactive captures show one updating progress line on stderr. When stderr is redirected or piped through `tee`, captures emit newline progress about every 10 seconds; auto-capture progress includes `timecode=H:MM:SS` for CLV or `frame=<n>` for CAV once the player address is known. Successful auto-captures stop the player during cleanup.
 

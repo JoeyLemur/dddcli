@@ -166,7 +166,7 @@ bool writeMetadataIfRequested(const CliOptions& options, const CaptureMetadata& 
     return true;
 }
 
-int finishCapture(UsbDeviceBase& usb)
+int finishCapture(UsbDeviceBase& usb, bool completionExpected = true)
 {
     if (usb.GetTransferInProgress())
     {
@@ -178,7 +178,14 @@ int finishCapture(UsbDeviceBase& usb)
         std::cerr << "Capture ended with " << transferResultToString(result) << "\n";
         return 1;
     }
-    std::cerr << "Capture complete: " << transferResultToString(result) << "\n";
+    if (completionExpected)
+    {
+        std::cerr << "Capture complete: " << transferResultToString(result) << "\n";
+    }
+    else
+    {
+        std::cerr << "Capture stopped after auto-capture error\n";
+    }
     return 0;
 }
 
@@ -220,6 +227,7 @@ int runCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     progress.finish();
     int result = finishCapture(usb);
     metadata.duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+    std::cerr << "Capture duration: " << formatCaptureDuration(metadata.duration) << "\n";
     bool metadataWritten = writeMetadataIfRequested(options, metadata, usb);
     if (!metadataWritten && result == 0)
     {
@@ -806,10 +814,23 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
     int consecutiveAddressReadFailures = 0;
     constexpr int maxConsecutiveAddressReadFailures = 3;
     AutoCaptureStopState stopState;
+    AutoCapturePositionWatchdogState positionWatchdog;
     bool stoppedOnEndTransition = false;
     while (!autoCaptureError && !stopRequested && usb.GetTransferInProgress())
     {
         auto now = std::chrono::steady_clock::now();
+        auto safetyLimit = autoCaptureSafetyLimit(activeOptions.discType);
+        if (safetyLimit.has_value() && now - start >= safetyLimit.value())
+        {
+            autoCaptureError = true;
+            metadata.stopReason = "safety-duration-limit";
+            progress.clear();
+            std::cerr << (activeOptions.discType == DiscTypeCli::Cav ? "CAV" : "CLV")
+                      << " auto-capture safety limit of "
+                      << std::chrono::duration_cast<std::chrono::minutes>(safetyLimit.value()).count()
+                      << " minutes reached; aborting capture\n";
+            break;
+        }
         if (hasReachedCaptureDuration(activeOptions, now - start))
         {
             if (!activeOptions.quiet)
@@ -915,6 +936,18 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
                 std::cerr << autoCaptureErrorMessage << "\n";
                 break;
             }
+            if (!activeOptions.disableWatchdog &&
+                hasAutoCapturePositionStalled(activeOptions.discType, address, now, positionWatchdog))
+            {
+                autoCaptureError = true;
+                metadata.stopReason = "player-position-stalled";
+                auto stallTimeout = autoCapturePositionStallTimeout(activeOptions.discType).value();
+                progress.clear();
+                std::cerr << (activeOptions.discType == DiscTypeCli::Cav ? "CAV" : "CLV")
+                          << " player position did not advance for " << stallTimeout.count()
+                          << " seconds; aborting auto-capture\n";
+                break;
+            }
             lastAddress = address;
         }
         else
@@ -950,8 +983,9 @@ int runAutoCapture(UsbDeviceLibUsb& usb, const CliOptions& options)
         }
     }
     progress.finish();
-    int captureResult = finishCapture(usb);
+    int captureResult = finishCapture(usb, !autoCaptureError);
     metadata.duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+    std::cerr << "Capture duration: " << formatCaptureDuration(metadata.duration) << "\n";
     captureStarted = false;
     bool cleanupFailed = false;
     auto finalAction = finalPlayerActionForAutoCapture(activeOptions.discType, autoCaptureError);
