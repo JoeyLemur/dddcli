@@ -37,31 +37,7 @@ If no devices are found:
 
 The defaults are VID `0x1D50` and PID `0x603B`. When no matching devices are visible, `list-devices` prints `No Domesday Duplicator USB devices found` and exits non-zero.
 
-On Linux, install a late udev rule such as `/etc/udev/rules.d/99-domesday.rules` for non-root capture access:
-
-```text
-SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="603b", MODE="0666"
-```
-
-Use `ATTR{...}` for `idVendor` and `idProduct` because those attributes live on the USB device node itself. `ATTRS{...}` walks parent devices and may fail to match. Use a late filename such as `99-domesday.rules` because the system default USB rule commonly runs around `50-udev-default.rules` and sets USB device nodes to `0664 root:root`; an earlier custom rule can be overwritten and still produce `LIBUSB_ERROR_ACCESS` after reboot.
-
-Reload and apply the rule:
-
-```sh
-sudo udevadm control --reload-rules
-sudo udevadm trigger --action=change --subsystem-match=usb --attr-match=idVendor=1d50 --attr-match=idProduct=603b
-```
-
-Then verify the current device node is writable by the capture user:
-
-```sh
-dddcli list-devices
-udevadm info --query=property --path=/sys/bus/usb/devices/4-1
-ls -l /dev/bus/usb/004/002
-udevadm test /sys/bus/usb/devices/4-1
-```
-
-Adjust the `4-1` sysfs path and `/dev/bus/usb/...` node to match `list-devices` and the `BUSNUM`/`DEVNUM` shown by `udevadm`. In `udevadm test`, confirm the default USB rule sets `MODE 0664` first and `99-domesday.rules` sets `MODE 0666` afterward.
+For Linux USB access, complete the [Linux capture host setup](LINUX_CAPTURE_HOST_SETUP.md#1-allow-non-root-usb-access). It contains the udev rule, how to apply it, and how to verify the final device-node permissions.
 
 If the Duplicator only appears after a manual poke or unplug/replug, first check whether the kernel saw it during boot:
 
@@ -69,7 +45,7 @@ If the Duplicator only appears after a manual poke or unplug/replug, first check
 sudo journalctl -b -k --no-pager | grep -Ei '1d50|603b|Domesday|usb [0-9]+-[0-9]+'
 ```
 
-If the boot log shows `idVendor=1d50, idProduct=603b`, the hardware enumerated and the likely permanent fix is the late udev rule above. If the boot log does not show the Duplicator at all, investigate USB power, cable/port, hub behavior, firmware startup timing, or xHCI/controller quirks before chasing permissions.
+If the boot log shows `idVendor=1d50, idProduct=603b`, the hardware enumerated and the likely permanent fix is the late udev rule in the [Linux capture host setup](LINUX_CAPTURE_HOST_SETUP.md#1-allow-non-root-usb-access). If the boot log does not show the Duplicator at all, investigate USB power, cable/port, hub behavior, firmware startup timing, or xHCI/controller quirks before chasing permissions.
 
 ## Player Does Not Connect
 
@@ -92,6 +68,8 @@ If it fails:
 ```sh
 ./build/dddcli player raw-command '?X' --serial-device /dev/ttyUSB0
 ```
+
+For Linux serial-device permissions, see [Allow Serial-Device Access](LINUX_CAPTURE_HOST_SETUP.md#4-allow-serial-device-access).
 
 ## Loaded Disc Reports Unknown Type
 
@@ -161,7 +139,7 @@ Capture files can be large. If capture fails after starting:
 - confirm the output filesystem has enough free space
 - write to fast local storage when possible
 - try the default `.lds` format first
-- on Linux, use the host tuning below if startup reports `USB memory limit`, `LIBUSB_ERROR_NO_MEM`, or `mlock failed`
+- on Linux, use the [Linux capture host setup](LINUX_CAPTURE_HOST_SETUP.md) if startup reports `USB memory limit`, `LIBUSB_ERROR_NO_MEM`, `RLIMIT_MEMLOCK`, or `mlock failed`
 - use `--small-usb-transfer-queue` only when the host cannot be tuned
 - if writes cannot keep up, keep `--small-usb-transfers` enabled and try faster local storage
 - keep the JSON sidecar; it records the transfer result and sample statistics
@@ -172,56 +150,9 @@ If `--json` points to a path in a missing directory, the CLI creates that direct
 
 When stderr is attached to a terminal, capture progress is shown as a single updating line. When stderr is redirected or piped through a command such as `tee`, progress is written as newline-delimited status about every 10 seconds so long captures still leave useful log evidence. Auto-capture progress also includes the current player position as `timecode=H:MM:SS` for CLV or `frame=<n>` for CAV after the first address is read. `--quiet` suppresses both forms of progress output.
 
-### Linux Capture Host Tuning
+## Linux Capture Host Errors
 
-The default capture queue needs enough kernel USBFS memory for libusb transfers and enough locked-memory allowance for capture buffers. Use these capture-host defaults:
-
-- `usbcore.usbfs_memory_mb=512`
-- `memlock=524288` KiB, or `unlimited`
-- `rtprio=80` or higher, so capture threads can request realtime priority
-
-Check the active values:
-
-```sh
-cat /sys/module/usbcore/parameters/usbfs_memory_mb
-ulimit -l
-ulimit -r
-```
-
-Set USBFS memory until reboot:
-
-```sh
-echo 512 | sudo tee /sys/module/usbcore/parameters/usbfs_memory_mb
-```
-
-Make USBFS memory persistent with `/etc/modprobe.d/usbcore.conf`:
-
-```text
-options usbcore usbfs_memory_mb=512
-```
-
-Some systems load `usbcore` from the initramfs before the real root filesystem's `/etc/modprobe.d` is available. If `cat /sys/module/usbcore/parameters/usbfs_memory_mb` is still `16` after reboot, rebuild the active initramfs after adding the modprobe file. On Debian/Ubuntu-style systems:
-
-```sh
-sudo update-initramfs -u
-```
-
-Reboot and re-check the runtime value. If the value is still not `512`, add `usbcore.usbfs_memory_mb=512` to the kernel command line instead.
-
-For a PAM-login shell, raise `memlock` for the capture user or group with `/etc/security/limits.d/domesday.conf`:
-
-```text
-captureuser soft memlock 524288
-captureuser hard memlock 524288
-@domesday soft memlock 524288
-@domesday hard memlock 524288
-captureuser soft rtprio 80
-captureuser hard rtprio 80
-@domesday soft rtprio 80
-@domesday hard rtprio 80
-```
-
-Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their inherited limits, so start a fresh login session before re-checking `ulimit -l` and `ulimit -r`. Run `dddcli` from a shell that reports the expected limits.
+The one-time [Linux capture host setup](LINUX_CAPTURE_HOST_SETUP.md) covers USB permissions, USBFS memory, and the `memlock`/`rtprio` limits. For a startup error such as `USB memory limit`, `LIBUSB_ERROR_NO_MEM`, `RLIMIT_MEMLOCK`, or `mlock failed`, return to its checks and make the persistent configuration changes before retrying the default queue.
 
 If capture prints:
 
@@ -231,39 +162,7 @@ warning: SetCurrentThreadRealtimePriority: Unable to set thread priority
 
 the process could not raise its capture threads to realtime scheduler priority. This does not mean the capture failed. It means the kernel kept the process at normal scheduling priority, so capture is more exposed to CPU scheduling delays while the USB transfer and disk writer threads are trying to keep up.
 
-Short captures may still complete successfully with this warning. For long captures, busy systems, slow disks, or machines doing other work, fix the realtime limit before treating the host as fully tuned.
-
-Check the active realtime priority limit in the same shell that will run `dddcli`:
-
-```sh
-ulimit -r
-```
-
-Expected: `80` or higher. If it reports `0`, the user cannot request realtime priority from that shell.
-
-For a normal PAM login session, add an `rtprio` limit for the capture user or a capture group in `/etc/security/limits.d/domesday.conf`:
-
-```text
-captureuser soft rtprio 80
-captureuser hard rtprio 80
-@domesday soft rtprio 80
-@domesday hard rtprio 80
-```
-
-Then start a fresh login session and check again:
-
-```sh
-ulimit -r
-```
-
-Existing terminals and long-running desktop sessions keep the old inherited limit. If `ulimit -r` still reports `0` after adding the limits file, common causes are:
-
-- the command is running from an old terminal that was open before the limit changed
-- the user is not a member of the configured group
-- the limits file uses `@group` syntax for a user name, or a bare name for a group
-- the terminal or launcher is not PAM-backed or does not inherit the configured limits
-
-If the warning remains but the JSON sidecar reports `transferResultString` as `success`, the run completed despite normal scheduling priority. Record the warning with the capture results, especially when comparing long-run stability or investigating dropped/corrupt data.
+Short captures may still complete successfully with this warning. For long captures, busy systems, slow disks, or machines doing other work, finish the `rtprio` setup before treating the host as fully tuned. If the warning remains but the JSON sidecar reports `transferResultString` as `success`, the run completed despite normal scheduling priority. Record the warning with the capture results, especially when comparing long-run stability or investigating dropped/corrupt data.
 
 ## What To Record For Bugs
 

@@ -33,6 +33,8 @@ Optional comparison: repeat the same capture tests with the default `build/` dir
 
 ## 2. Host Preflight
 
+Before performance testing, complete the [Linux capture host setup](../../docs/LINUX_CAPTURE_HOST_SETUP.md). It is the single source for the udev, USBFS-memory, `memlock`, and `rtprio` settings below.
+
 Confirm the DdD device is visible. `list-devices` accepts matching devices connected at USB 2 High Speed or faster; this performance test requires USB 3 SuperSpeed.
 
 ```sh
@@ -62,14 +64,6 @@ Expected:
 - `usbfs_memory_mb` is at least `512`
 - `ulimit -l` is at least `524288` KiB, or `unlimited`
 - `ulimit -r` is `80` or higher if validating realtime capture priority
-
-If the persistent USBFS setting was added through `/etc/modprobe.d/usbcore.conf`, rebuild the active initramfs when `usbcore` is loaded early during boot. On Debian/Ubuntu-style systems:
-
-```sh
-sudo update-initramfs -u
-```
-
-Reboot and confirm `cat /sys/module/usbcore/parameters/usbfs_memory_mb` reports `512`. If it does not, use the kernel command line parameter `usbcore.usbfs_memory_mb=512`.
 
 Record storage and filesystem details for the output path:
 

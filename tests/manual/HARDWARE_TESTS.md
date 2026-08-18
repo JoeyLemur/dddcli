@@ -40,11 +40,11 @@ On Linux, confirm the matching `/dev/bus/usb/...` node is writable by the captur
 ls -l /dev/bus/usb/004/002
 ```
 
-Expected: the node is writable by the capture user, for example `crw-rw-rw-` when using a late `/etc/udev/rules.d/99-domesday.rules` rule. If it is still `0664 root:root`, see `../../docs/TROUBLESHOOTING.md`.
+Expected: the node is writable by the capture user, for example `crw-rw-rw-` when using a late `/etc/udev/rules.d/99-domesday.rules` rule. If it is still `0664 root:root`, complete the [Linux capture host setup](../../docs/LINUX_CAPTURE_HOST_SETUP.md).
 
-### Linux Capture Host Tuning
+### Linux Capture Host Setup
 
-Linux capture hosts should provide enough USBFS and locked-memory headroom for the default capture queues:
+Before hardware validation, complete the [Linux capture host setup](../../docs/LINUX_CAPTURE_HOST_SETUP.md). It contains every required OS-level change; do not proceed with the default capture queue until this check passes in the same fresh login shell that will run the tests:
 
 ```sh
 cat /sys/module/usbcore/parameters/usbfs_memory_mb
@@ -57,49 +57,6 @@ Expected:
 - `usbfs_memory_mb` is at least `512`
 - `ulimit -l` is at least `524288` KiB, or `unlimited`
 - `ulimit -r` is high enough for realtime capture priority, such as `80` or higher
-
-To set the USBFS memory pool temporarily until reboot:
-
-```sh
-echo 512 | sudo tee /sys/module/usbcore/parameters/usbfs_memory_mb
-```
-
-To make the USBFS setting persistent, add a modprobe setting:
-
-```sh
-echo 'options usbcore usbfs_memory_mb=512' | sudo tee /etc/modprobe.d/usbcore.conf
-```
-
-If `usbcore` is loaded from the initramfs during boot, rebuild the active initramfs after adding the modprobe setting. On Debian/Ubuntu-style systems:
-
-```sh
-sudo update-initramfs -u
-```
-
-Then reboot and re-check:
-
-```sh
-cat /sys/module/usbcore/parameters/usbfs_memory_mb
-```
-
-If the value is still not `512`, add `usbcore.usbfs_memory_mb=512` to the kernel command line instead.
-
-To raise the locked-memory limit for a PAM-login shell, create a limits file such as `/etc/security/limits.d/domesday.conf`:
-
-```text
-captureuser soft memlock 524288
-captureuser hard memlock 524288
-@domesday soft memlock 524288
-@domesday hard memlock 524288
-captureuser soft rtprio 80
-captureuser hard rtprio 80
-@domesday soft rtprio 80
-@domesday hard rtprio 80
-```
-
-Use a bare name such as `captureuser` for a user-specific limit, or an `@` prefix such as `@domesday` for a group limit. Existing sessions keep their old limits, so start a fresh login session before re-checking. Run `dddcli` from a shell that reports the expected limits.
-
-If capture prints `warning: SetCurrentThreadRealtimePriority: Unable to set thread priority`, the process did not receive realtime scheduling permission. Capture can continue, but configuring `rtprio` removes that warning and gives the capture threads better scheduler priority.
 
 - Confirm the serial device exists and the user can access it:
 
