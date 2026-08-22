@@ -1,5 +1,14 @@
 # Release notes
 
+## v1.2.0 — 2026-08-21
+
+This release makes auto-capture safer and clarifies Linux capture-host setup.
+
+- Auto-capture now has fixed CAV/CLV duration safety limits and detects stalled player positions; `--disable-watchdog` disables only the position check for a single run.
+- Safety-aborted captures stop USB capture cleanly, leave the player in still-frame for inspection, release key lock, and record the stop reason in JSON metadata.
+- Whole-disc and unbounded lead-in CAV captures now recognize an early frame rollover as the end of the disc.
+- Linux capture-host guidance now consolidates USB permissions, transfer-memory, `memlock`, and real-time-priority setup in one document.
+
 ## v1.1.2 — 2026-08-10
 
 This release extends reliable auto-capture end detection to CLV discs and makes
